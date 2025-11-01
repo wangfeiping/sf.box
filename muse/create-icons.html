@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Muse 图标生成</title>
+</head>
+<body>
+  <h2>Muse 图标生成工具</h2>
+  <p>此页面用于生成不同尺寸的 Muse 插件图标</p>
+  <canvas id="canvas16" width="16" height="16"></canvas>
+  <canvas id="canvas48" width="48" height="48"></canvas>
+  <canvas id="canvas128" width="128" height="128"></canvas>
+  <br><br>
+  <button onclick="downloadIcons()">下载图标</button>
+
+  <script>
+    function drawIcon(canvas, size) {
+      const ctx = canvas.getContext('2d');
+
+      // 背景
+      ctx.fillStyle = '#4A90E2';
+      ctx.fillRect(0, 0, size, size);
+
+      // 文字 M
+      ctx.fillStyle = 'white';
+      ctx.font = `bold ${size * 0.6}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('M', size / 2, size / 2);
+    }
+
+    // 绘制图标
+    drawIcon(document.getElementById('canvas16'), 16);
+    drawIcon(document.getElementById('canvas48'), 48);
+    drawIcon(document.getElementById('canvas128'), 128);
+
+    function downloadIcons() {
+      ['16', '48', '128'].forEach(size => {
+        const canvas = document.getElementById('canvas' + size);
+        const link = document.createElement('a');
+        link.download = 'icon' + size + '.png';
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+      alert('图标已下载！请将它们放到 icons 目录中');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Muse - 项目管理器</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="popup-browser.css">
+</head>
+<body class="popup-browser">
+  <div class="browser-container">
+    <!-- 顶部工具栏 -->
+    <div class="browser-toolbar">
+      <div class="toolbar-actions">
+        <button id="newProjectBtn" title="新建项目">📁 新建项目</button>
+        <button id="newFileBtn" title="新建文件">📄 新建文件</button>
+        <button id="openEditorBtn" title="在新标签页打开完整编辑器">🚀 打开编辑器</button>
+      </div>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="🔍 搜索项目和文件..." class="search-input" lang="zh-CN">
+    </div>
+
+    <!-- 项目列表 -->
+    <div class="project-list-container">
+      <div id="projectList" class="project-list">
+        <!-- 项目将动态生成 -->
+      </div>
+      <div id="emptyState" class="empty-state hidden">
+        <div class="empty-icon">📝</div>
+        <p>还没有项目</p>
+        <p class="empty-hint">点击"新建项目"开始使用</p>
+      </div>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="browser-statusbar">
+      <span id="projectCount">0 个项目</span>
+      <span id="fileCount">0 个文件</span>
+    </div>
+  </div>
+
+  <!-- 新建项目对话框 -->
+  <div id="newProjectDialog" class="dialog hidden">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3>新建项目</h3>
+        <button id="closeNewProjectDialog" class="dialog-close">✕</button>
+      </div>
+      <div class="dialog-body">
+        <input type="text" id="projectNameInput" placeholder="项目名称" class="dialog-input" lang="zh-CN">
+        <textarea id="projectDescInput" placeholder="项目描述（可选）" class="dialog-textarea" lang="zh-CN"></textarea>
+      </div>
+      <div class="dialog-footer">
+        <button id="cancelNewProject" class="btn-secondary">取消</button>
+        <button id="confirmNewProject" class="btn-primary">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建文件对话框 -->
+  <div id="newFileDialog" class="dialog hidden">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3>新建文件</h3>
+        <button id="closeNewFileDialog" class="dialog-close">✕</button>
+      </div>
+      <div class="dialog-body">
+        <select id="selectProjectForFile" class="dialog-select">
+          <option value="">选择项目...</option>
+        </select>
+        <input type="text" id="fileNameInput" placeholder="文件名.md" class="dialog-input" lang="zh-CN">
+      </div>
+      <div class="dialog-footer">
+        <button id="cancelNewFile" class="btn-secondary">取消</button>
+        <button id="confirmNewFile" class="btn-primary">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="libs/marked.min.js"></script>
+  <script src="popup-browser.js"></script>
+</body>
+</html>

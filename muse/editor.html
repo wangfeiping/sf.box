@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Muse - Markdown Editor</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* 全屏编辑器样式 */
+    body {
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* 调整编辑器为全屏 */
+    #editor {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+    }
+
+    /* 确保输入法正常工作 */
+    #editor, input[type="text"] {
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+      user-select: text;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 顶部工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <input type="text" id="filename" placeholder="文件名.md" class="filename-input" lang="zh-CN">
+        <button id="newFileBtn" title="新建文件">📄 新建</button>
+        <button id="saveBtn" title="保存文件">💾 保存</button>
+        <button id="loadBtn" title="加载文件">📂 打开</button>
+      </div>
+      <div class="toolbar-right">
+        <button id="togglePreviewBtn" title="切换预览">👁️ 预览</button>
+      </div>
+    </div>
+
+    <!-- Git 操作栏 -->
+    <div class="git-toolbar">
+      <button id="gitInitBtn" title="初始化 Git 仓库">🔧 Init</button>
+      <button id="gitCommitBtn" title="提交更改">✅ Commit</button>
+      <button id="gitLogBtn" title="查看历史">📜 Log</button>
+      <button id="gitDiffBtn" title="查看差异">🔍 Diff</button>
+      <input type="text" id="commitMessage" placeholder="提交信息" class="commit-input" lang="zh-CN">
+    </div>
+
+    <!-- 文件列表 -->
+    <div id="fileListPanel" class="file-list-panel hidden">
+      <div class="panel-header">
+        <h3>文件列表</h3>
+        <button id="closeFileListBtn">✕</button>
+      </div>
+      <div id="fileList" class="file-list"></div>
+    </div>
+
+    <!-- 编辑器和预览区域 -->
+    <div class="editor-container">
+      <div id="editorPane" class="editor-pane">
+        <textarea id="editor" placeholder="在这里输入 Markdown 内容..." lang="zh-CN" spellcheck="false"></textarea>
+      </div>
+      <div id="previewPane" class="preview-pane hidden">
+        <div id="preview" class="preview-content"></div>
+      </div>
+    </div>
+
+    <!-- Git 信息面板 -->
+    <div id="gitInfoPanel" class="git-info-panel hidden">
+      <div class="panel-header">
+        <h3 id="gitInfoTitle">Git 信息</h3>
+        <button id="closeGitInfoBtn">✕</button>
+      </div>
+      <pre id="gitInfoContent" class="git-info-content"></pre>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="statusbar">
+      <span id="status">就绪</span>
+      <span id="charCount">字符: 0</span>
+    </div>
+  </div>
+
+  <script src="libs/marked.min.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>
