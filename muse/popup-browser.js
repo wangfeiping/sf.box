@@ -3,13 +3,17 @@
 // 全局状态
 let projects = {};
 let searchQuery = '';
+let githubToken = null;
+let githubUser = null;
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
   await loadProjects();
+  await loadGithubAuth();
   renderProjects();
   updateStats();
   initEventListeners();
+  updateGithubUI();
 });
 
 // 事件监听器
@@ -47,6 +51,22 @@ function initEventListeners() {
   document.getElementById('fileNameInput').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') createFile();
   });
+
+  // GitHub 按钮
+  document.getElementById('githubBtn').addEventListener('click', handleGithubClick);
+
+  // GitHub 登录对话框
+  document.getElementById('closeGithubLoginDialog').addEventListener('click', hideGithubLoginDialog);
+  document.getElementById('cancelGithubLogin').addEventListener('click', hideGithubLoginDialog);
+  document.getElementById('confirmGithubLogin').addEventListener('click', connectGithub);
+  document.getElementById('githubTokenInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') connectGithub();
+  });
+
+  // GitHub 项目列表对话框
+  document.getElementById('closeGithubReposDialog').addEventListener('click', hideGithubReposDialog);
+  document.getElementById('refreshGithubRepos').addEventListener('click', loadGithubRepos);
+  document.getElementById('githubLogout').addEventListener('click', disconnectGithub);
 }
 
 // 打开完整编辑器
@@ -402,3 +422,264 @@ window.renameProject = renameProject;
 window.deleteProject = deleteProject;
 window.renameFile = renameFile;
 window.deleteFile = deleteFile;
+
+// ============ GitHub 功能 ============
+
+// 加载 GitHub 认证信息
+async function loadGithubAuth() {
+  const result = await chrome.storage.local.get(['githubToken', 'githubUser']);
+  githubToken = result.githubToken || null;
+  githubUser = result.githubUser || null;
+}
+
+// 保存 GitHub 认证信息
+async function saveGithubAuth() {
+  await chrome.storage.local.set({
+    githubToken: githubToken,
+    githubUser: githubUser
+  });
+}
+
+// 更新 GitHub UI 状态
+function updateGithubUI() {
+  const userInfo = document.getElementById('userInfo');
+  const githubBtnIcon = document.getElementById('githubBtnIcon');
+  const githubBtnText = document.getElementById('githubBtnText');
+
+  if (githubUser) {
+    userInfo.style.display = 'flex';
+    document.getElementById('userAvatar').src = githubUser.avatar_url;
+    document.getElementById('userName').textContent = githubUser.login;
+    githubBtnIcon.textContent = '✓';
+    githubBtnText.textContent = 'GitHub';
+  } else {
+    userInfo.style.display = 'none';
+    githubBtnIcon.textContent = '🔗';
+    githubBtnText.textContent = 'GitHub';
+  }
+}
+
+// 处理 GitHub 按钮点击
+function handleGithubClick() {
+  if (githubToken) {
+    showGithubReposDialog();
+  } else {
+    showGithubLoginDialog();
+  }
+}
+
+// 显示/隐藏 GitHub 登录对话框
+function showGithubLoginDialog() {
+  document.getElementById('githubLoginDialog').classList.remove('hidden');
+  document.getElementById('githubTokenInput').focus();
+}
+
+function hideGithubLoginDialog() {
+  document.getElementById('githubLoginDialog').classList.add('hidden');
+  document.getElementById('githubTokenInput').value = '';
+}
+
+// 连接 GitHub
+async function connectGithub() {
+  const tokenInput = document.getElementById('githubTokenInput');
+  const token = tokenInput.value.trim();
+
+  if (!token) {
+    alert('请输入 GitHub Token');
+    return;
+  }
+
+  try {
+    // 验证 token 并获取用户信息
+    const response = await fetch('https://api.github.com/user', {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Token 无效或已过期');
+    }
+
+    const user = await response.json();
+    githubToken = token;
+    githubUser = user;
+
+    await saveGithubAuth();
+    hideGithubLoginDialog();
+    updateGithubUI();
+    showGithubReposDialog();
+  } catch (error) {
+    alert('连接失败: ' + error.message);
+  }
+}
+
+// 断开 GitHub 连接
+async function disconnectGithub() {
+  if (confirm('确定要断开 GitHub 连接吗?')) {
+    githubToken = null;
+    githubUser = null;
+    await chrome.storage.local.remove(['githubToken', 'githubUser']);
+    updateGithubUI();
+    hideGithubReposDialog();
+  }
+}
+
+// 显示/隐藏 GitHub 项目列表对话框
+function showGithubReposDialog() {
+  document.getElementById('githubReposDialog').classList.remove('hidden');
+  loadGithubRepos();
+}
+
+function hideGithubReposDialog() {
+  document.getElementById('githubReposDialog').classList.add('hidden');
+}
+
+// 加载 GitHub 项目列表
+async function loadGithubRepos() {
+  if (!githubToken) return;
+
+  const loading = document.getElementById('githubReposLoading');
+  const reposList = document.getElementById('githubReposList');
+
+  loading.classList.remove('hidden');
+  reposList.innerHTML = '';
+
+  try {
+    // 获取用户的仓库列表 (包括私有仓库)
+    const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', {
+      headers: {
+        'Authorization': `token ${githubToken}`,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('获取项目列表失败');
+    }
+
+    const repos = await response.json();
+    loading.classList.add('hidden');
+
+    if (repos.length === 0) {
+      reposList.innerHTML = '<div class="empty-state"><p>没有找到项目</p></div>';
+      return;
+    }
+
+    reposList.innerHTML = repos.map(repo => renderGithubRepo(repo)).join('');
+  } catch (error) {
+    loading.classList.add('hidden');
+    reposList.innerHTML = `<div class="empty-state"><p style="color: #e74c3c;">加载失败: ${error.message}</p></div>`;
+  }
+}
+
+// 渲染 GitHub 项目卡片
+function renderGithubRepo(repo) {
+  const updatedAt = new Date(repo.updated_at).toLocaleDateString('zh-CN');
+  const language = repo.language || 'Unknown';
+  const description = repo.description || '无描述';
+
+  return `
+    <div class="github-repo-card">
+      <div class="repo-header">
+        <div class="repo-info">
+          <div class="repo-name">
+            ${repo.private ? '🔒' : '📖'} ${escapeHtml(repo.name)}
+          </div>
+          <div class="repo-desc">${escapeHtml(description)}</div>
+        </div>
+        <button class="btn-primary" onclick="importGithubRepo('${repo.full_name}', '${escapeHtml(repo.name)}', '${escapeHtml(repo.default_branch)}')">
+          导入
+        </button>
+      </div>
+      <div class="repo-meta">
+        <span>⭐ ${repo.stargazers_count}</span>
+        <span>🔀 ${repo.forks_count}</span>
+        <span>💻 ${language}</span>
+        <span>📅 ${updatedAt}</span>
+      </div>
+    </div>
+  `;
+}
+
+// 导入 GitHub 项目
+async function importGithubRepo(fullName, repoName, defaultBranch) {
+  if (!githubToken) return;
+
+  try {
+    // 获取仓库的 README 文件
+    const readmeResponse = await fetch(
+      `https://api.github.com/repos/${fullName}/readme`,
+      {
+        headers: {
+          'Authorization': `token ${githubToken}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      }
+    );
+
+    let readmeContent = '';
+    if (readmeResponse.ok) {
+      const readmeData = await readmeResponse.json();
+      // 解码 base64 内容
+      readmeContent = decodeBase64Unicode(readmeData.content);
+    }
+
+    // 创建项目
+    const projectId = 'github_' + Date.now();
+    const project = {
+      id: projectId,
+      name: repoName,
+      description: `从 GitHub 导入: ${fullName}`,
+      files: {},
+      githubRepo: fullName,
+      githubBranch: defaultBranch,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // 添加 README 文件
+    if (readmeContent) {
+      project.files['README.md'] = {
+        filename: 'README.md',
+        content: readmeContent,
+        lastModified: new Date().toISOString()
+      };
+    }
+
+    projects[projectId] = project;
+    await saveProjects();
+
+    hideGithubReposDialog();
+    renderProjects();
+
+    alert(`项目 "${repoName}" 导入成功!`);
+
+    // 展开项目
+    setTimeout(() => {
+      const card = document.querySelector(`[data-project-id="${projectId}"]`);
+      if (card) card.classList.add('expanded');
+    }, 100);
+  } catch (error) {
+    alert('导入失败: ' + error.message);
+  }
+}
+
+// Base64 解码 (支持 Unicode)
+function decodeBase64Unicode(base64) {
+  // 移除所有换行符
+  base64 = base64.replace(/\s/g, '');
+  // 解码 base64
+  const binary = atob(base64);
+  // 转换为 UTF-8
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const decoder = new TextDecoder('utf-8');
+  return decoder.decode(bytes);
+}
+
+// 使 GitHub 函数全局可访问
+window.importGithubRepo = importGithubRepo;

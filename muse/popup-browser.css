@@ -18,6 +18,9 @@
   background: #ffffff;
   border-bottom: 1px solid #e0e0e0;
   padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .toolbar-actions {
@@ -30,6 +33,50 @@
   padding: 8px 12px;
   font-size: 12px;
   white-space: nowrap;
+}
+
+/* 用户信息 */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #333;
+}
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #667eea;
+}
+
+/* GitHub 按钮 */
+#githubBtn {
+  background: #24292e;
+  color: white;
+  border: none;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+}
+
+#githubBtn:hover {
+  background: #1b1f23;
+  box-shadow: 0 2px 4px rgba(36, 41, 46, 0.3);
+}
+
+#githubBtnIcon {
+  font-size: 14px;
+}
+
+#githubBtnText {
+  font-size: 11px;
 }
 
 /* 搜索栏 */
@@ -450,4 +497,148 @@
 #openEditorBtn:hover {
   background: linear-gradient(135deg, #5568d3 0%, #653a8b 100%);
   box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+/* GitHub 相关样式 */
+
+/* 大尺寸对话框 */
+.dialog-large {
+  max-width: 600px;
+  max-height: 80vh;
+}
+
+.dialog-large .dialog-body {
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #666;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f0f0f0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* GitHub 项目列表 */
+.github-repos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* GitHub 项目卡片 */
+.github-repo-card {
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
+  transition: all 0.2s;
+}
+
+.github-repo-card:hover {
+  background: #f8f9fa;
+}
+
+.github-repo-card:last-child {
+  border-bottom: none;
+}
+
+.repo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.repo-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.repo-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: #0366d6;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.repo-desc {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.repo-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #999;
+  flex-wrap: wrap;
+}
+
+.repo-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 按钮图标 */
+.btn-icon {
+  padding: 6px 10px;
+  border: 1px solid #d0d0d0;
+  background: #ffffff;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: #f0f0f0;
+  border-color: #b0b0b0;
+}
+
+/* 滚动条样式 (GitHub 列表) */
+.dialog-large .dialog-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dialog-large .dialog-body::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+.dialog-large .dialog-body::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
+}
+
+.dialog-large .dialog-body::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
 }
