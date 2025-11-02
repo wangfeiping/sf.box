@@ -14,7 +14,15 @@
       <div class="toolbar-actions">
         <button id="newProjectBtn" title="新建项目">📁 新建项目</button>
         <button id="newFileBtn" title="新建文件">📄 新建文件</button>
+        <button id="githubBtn" title="GitHub 项目">
+          <span id="githubBtnIcon">🔗</span>
+          <span id="githubBtnText">GitHub</span>
+        </button>
         <button id="openEditorBtn" title="在新标签页打开完整编辑器">🚀 打开编辑器</button>
+      </div>
+      <div class="user-info" id="userInfo" style="display: none;">
+        <img id="userAvatar" src="" alt="" class="user-avatar">
+        <span id="userName"></span>
       </div>
     </div>
 
@@ -76,6 +84,53 @@
       <div class="dialog-footer">
         <button id="cancelNewFile" class="btn-secondary">取消</button>
         <button id="confirmNewFile" class="btn-primary">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub 登录对话框 -->
+  <div id="githubLoginDialog" class="dialog hidden">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3>连接 GitHub</h3>
+        <button id="closeGithubLoginDialog" class="dialog-close">✕</button>
+      </div>
+      <div class="dialog-body">
+        <p style="margin-bottom: 15px; color: #666; font-size: 13px;">
+          请输入 GitHub Personal Access Token 以访问您的项目。
+          <a href="https://github.com/settings/tokens/new?scopes=repo" target="_blank" style="color: #0366d6;">创建 Token</a>
+        </p>
+        <input type="password" id="githubTokenInput" placeholder="ghp_xxxxxxxxxxxx" class="dialog-input" lang="en">
+        <p style="margin-top: 10px; color: #999; font-size: 12px;">
+          Token 将安全存储在本地浏览器中
+        </p>
+      </div>
+      <div class="dialog-footer">
+        <button id="cancelGithubLogin" class="btn-secondary">取消</button>
+        <button id="confirmGithubLogin" class="btn-primary">连接</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub 项目列表对话框 -->
+  <div id="githubReposDialog" class="dialog hidden">
+    <div class="dialog-content dialog-large">
+      <div class="dialog-header">
+        <h3>GitHub 项目</h3>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button id="refreshGithubRepos" class="btn-icon" title="刷新">🔄</button>
+          <button id="githubLogout" class="btn-icon" title="断开连接">🚪</button>
+          <button id="closeGithubReposDialog" class="dialog-close">✕</button>
+        </div>
+      </div>
+      <div class="dialog-body">
+        <div id="githubReposLoading" class="loading-state hidden">
+          <div class="spinner"></div>
+          <p>加载中...</p>
+        </div>
+        <div id="githubReposList" class="github-repos-list">
+          <!-- GitHub 项目列表将动态生成 -->
+        </div>
       </div>
     </div>
   </div>

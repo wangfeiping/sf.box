@@ -14,6 +14,9 @@ const editorPane = document.getElementById('editorPane');
 const previewPane = document.getElementById('previewPane');
 const fileListPanel = document.getElementById('fileListPanel');
 const gitInfoPanel = document.getElementById('gitInfoPanel');
+const projectPath = document.getElementById('projectPath');
+const filePath = document.getElementById('filePath');
+const branchSelect = document.getElementById('branchSelect');
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -42,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('gitInitBtn').addEventListener('click', gitInit);
   document.getElementById('gitCommitBtn').addEventListener('click', gitCommit);
+  document.getElementById('gitPushBtn').addEventListener('click', gitPush);
   document.getElementById('gitLogBtn').addEventListener('click', gitLog);
   document.getElementById('gitDiffBtn').addEventListener('click', gitDiff);
 
@@ -52,6 +56,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('closeGitInfoBtn').addEventListener('click', () => {
     gitInfoPanel.classList.add('hidden');
   });
+
+  // 分支选择相关事件
+  document.getElementById('refreshBranchBtn').addEventListener('click', refreshBranchList);
+  branchSelect.addEventListener('change', handleBranchChange);
+
+  // 加载分支列表
+  await refreshBranchList();
 });
 
 // 打开完整编辑器
@@ -61,7 +72,7 @@ function openFullEditor() {
   });
 }
 
-// 从 storage 加载文件（弹窗传递的）
+// 从 storage 加载文件(弹窗传递的)
 async function loadFileFromStorage() {
   const result = await chrome.storage.local.get(['currentProject', 'currentFile', 'projects']);
 
@@ -75,13 +86,16 @@ async function loadFileFromStorage() {
       filenameInput.value = result.currentFile;
       updateStatus(`已加载: ${result.currentFile}`);
 
+      // 更新项目和文件路径显示
+      updateProjectInfo(project, result.currentFile);
+
       // 清除临时数据
       chrome.storage.local.remove(['currentProject', 'currentFile']);
       return;
     }
   }
 
-  // 如果没有传递的文件，尝试加载最后编辑的文件
+  // 如果没有传递的文件,尝试加载最后编辑的文件
   loadLastFile();
 }
 
@@ -203,6 +217,16 @@ async function loadFile(filename) {
     if (isPreviewMode) {
       updatePreview();
     }
+
+    // 更新项目信息显示
+    if (currentProject) {
+      const result = await chrome.storage.local.get(['projects']);
+      const projects = result.projects || {};
+      const project = projects[currentProject];
+      if (project) {
+        updateProjectInfo(project, filename);
+      }
+    }
   }
 }
 
@@ -211,9 +235,21 @@ async function deleteFile(filename) {
     return;
   }
 
-  const files = await getFiles();
-  delete files[filename];
-  await chrome.storage.local.set({ files: files });
+  if (currentProject) {
+    // 从项目中删除文件
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+    if (projects[currentProject] && projects[currentProject].files) {
+      delete projects[currentProject].files[filename];
+      projects[currentProject].updatedAt = new Date().toISOString();
+      await chrome.storage.local.set({ projects: projects });
+    }
+  } else {
+    // 兼容旧的存储结构
+    const files = await getFiles();
+    delete files[filename];
+    await chrome.storage.local.set({ files: files });
+  }
 
   updateStatus(`已删除: ${filename}`);
   showFileList();
@@ -232,7 +268,20 @@ async function gitInit() {
     const gitData = await getGitData();
     gitData.initialized = true;
     gitData.commits = [];
-    await chrome.storage.local.set({ gitData: gitData });
+
+    // 保存到项目中
+    if (currentProject) {
+      const result = await chrome.storage.local.get(['projects']);
+      const projects = result.projects || {};
+      if (projects[currentProject]) {
+        projects[currentProject].gitData = gitData;
+        await chrome.storage.local.set({ projects: projects });
+      }
+    } else {
+      // 兼容旧的全局存储
+      await chrome.storage.local.set({ gitData: gitData });
+    }
+
     updateStatus('Git 仓库已初始化');
   } catch (error) {
     updateStatus('初始化失败: ' + error.message);
@@ -266,13 +315,205 @@ async function gitCommit() {
       files: JSON.parse(JSON.stringify(files)) // 深拷贝
     };
 
+    // 如果选择了分支,记录到commit中
+    const selectedBranch = branchSelect.value;
+    if (selectedBranch) {
+      commit.branch = selectedBranch;
+    }
+
     gitData.commits.push(commit);
-    await chrome.storage.local.set({ gitData: gitData });
+
+    // 保存到项目中
+    if (currentProject) {
+      const result = await chrome.storage.local.get(['projects']);
+      const projects = result.projects || {};
+      if (projects[currentProject]) {
+        projects[currentProject].gitData = gitData;
+        // 更新项目的分支信息
+        if (selectedBranch) {
+          projects[currentProject].githubBranch = selectedBranch;
+        }
+        await chrome.storage.local.set({ projects: projects });
+      }
+    } else {
+      // 兼容旧的全局存储
+      await chrome.storage.local.set({ gitData: gitData });
+    }
 
     commitMessageInput.value = '';
-    updateStatus(`已提交: ${message}`);
+    const branchInfo = selectedBranch ? ` (分支: ${selectedBranch})` : '';
+    updateStatus(`已提交: ${message}${branchInfo}`);
   } catch (error) {
     updateStatus('提交失败: ' + error.message);
+  }
+}
+
+// 获取仓库的所有分支
+async function fetchRepoBranches(fullName, token) {
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${fullName}/branches`,
+      {
+        headers: {
+          'Authorization': `token ${token}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`获取分支失败: ${response.statusText}`);
+    }
+
+    const branches = await response.json();
+    return branches.map(b => b.name);
+  } catch (error) {
+    console.error('获取分支失败:', error);
+    return [];
+  }
+}
+
+async function gitPush() {
+  try {
+    // 获取 GitHub 认证信息
+    const authResult = await chrome.storage.local.get(['githubToken', 'githubUser']);
+    if (!authResult.githubToken || !authResult.githubUser) {
+      alert('请先在主界面连接 GitHub 账户');
+      return;
+    }
+
+    // 获取当前项目信息
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+
+    if (!currentProject || !projects[currentProject]) {
+      alert('未找到当前项目信息');
+      return;
+    }
+
+    const project = projects[currentProject];
+
+    // 检查项目是否有 GitHub 仓库信息
+    if (!project.githubRepo) {
+      alert('当前项目没有关联的 GitHub 仓库。\n提示：从 GitHub 导入的项目会自动关联仓库信息。');
+      return;
+    }
+
+    // 检查是否选择了分支
+    const selectedBranch = branchSelect.value;
+    if (!selectedBranch) {
+      alert('请先选择要推送的分支');
+      return;
+    }
+
+    // 获取 Git 数据
+    const gitData = await getGitData();
+    if (!gitData.initialized || gitData.commits.length === 0) {
+      alert('没有可推送的提交');
+      return;
+    }
+
+    updateStatus(`正在推送到 GitHub (${selectedBranch})...`);
+
+    // 获取最新的提交
+    const latestCommit = gitData.commits[gitData.commits.length - 1];
+
+    // 获取仓库信息
+    const [owner, repo] = project.githubRepo.split('/');
+    const branch = selectedBranch;
+
+    // 为每个文件创建或更新内容
+    const token = authResult.githubToken;
+    let pushedFiles = 0;
+    const files = latestCommit.files;
+
+    for (const [filename, fileData] of Object.entries(files)) {
+      try {
+        // 获取文件当前的 SHA (如果存在)
+        let sha = null;
+        try {
+          const getResponse = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/contents/${filename}?ref=${branch}`,
+            {
+              headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github.v3+json'
+              }
+            }
+          );
+          if (getResponse.ok) {
+            const fileInfo = await getResponse.json();
+            sha = fileInfo.sha;
+          }
+        } catch (e) {
+          // 文件不存在，sha 保持为 null
+        }
+
+        // 创建或更新文件
+        const content = btoa(unescape(encodeURIComponent(fileData.content)));
+        const updateData = {
+          message: latestCommit.message,
+          content: content,
+          branch: branch
+        };
+
+        if (sha) {
+          updateData.sha = sha;
+        }
+
+        const updateResponse = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${filename}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `token ${token}`,
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updateData)
+          }
+        );
+
+        if (!updateResponse.ok) {
+          const error = await updateResponse.json();
+          throw new Error(`推送文件 ${filename} 失败: ${error.message}`);
+        }
+
+        pushedFiles++;
+        updateStatus(`正在推送... (${pushedFiles}/${Object.keys(files).length})`);
+      } catch (error) {
+        console.error(`推送文件 ${filename} 时出错:`, error);
+        alert(`推送文件 ${filename} 失败: ${error.message}`);
+        return;
+      }
+    }
+
+    // 标记提交为已推送
+    latestCommit.pushed = true;
+    latestCommit.pushedAt = new Date().toISOString();
+    latestCommit.pushedBranch = branch;
+
+    // 保存到项目中
+    if (currentProject) {
+      const result = await chrome.storage.local.get(['projects']);
+      const projects = result.projects || {};
+      if (projects[currentProject]) {
+        projects[currentProject].gitData = gitData;
+        // 更新项目的分支信息
+        projects[currentProject].githubBranch = selectedBranch;
+        await chrome.storage.local.set({ projects: projects });
+      }
+    } else {
+      // 兼容旧的全局存储
+      await chrome.storage.local.set({ gitData: gitData });
+    }
+
+    updateStatus(`✅ 成功推送 ${pushedFiles} 个文件到 GitHub`);
+    alert(`成功推送到 GitHub!\n仓库: ${project.githubRepo}\n分支: ${branch}\n文件数: ${pushedFiles}`);
+  } catch (error) {
+    console.error('Push 错误:', error);
+    updateStatus('推送失败: ' + error.message);
+    alert('推送到 GitHub 失败: ' + error.message);
   }
 }
 
@@ -359,11 +600,31 @@ function updatePreview() {
 
 // 辅助函数
 async function getFiles() {
+  // 如果有当前项目，从项目中获取文件
+  if (currentProject) {
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+    if (projects[currentProject] && projects[currentProject].files) {
+      return projects[currentProject].files;
+    }
+  }
+
+  // 兼容旧的存储结构
   const result = await chrome.storage.local.get(['files']);
   return result.files || {};
 }
 
 async function getGitData() {
+  if (currentProject) {
+    // 从项目中获取 Git 数据
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+    if (projects[currentProject]) {
+      return projects[currentProject].gitData || { initialized: false, commits: [] };
+    }
+  }
+
+  // 兼容旧的全局 Git 数据
   const result = await chrome.storage.local.get(['gitData']);
   return result.gitData || { initialized: false, commits: [] };
 }
@@ -414,4 +675,114 @@ function simpleDiff(oldText, newText) {
   }
 
   return diff || '没有差异';
+}
+
+// 更新项目信息显示
+function updateProjectInfo(project, filename) {
+  if (project) {
+    // 显示项目名称和GitHub仓库信息
+    const projectName = project.name || currentProject;
+    const repoInfo = project.githubRepo ? ` (${project.githubRepo})` : '';
+    projectPath.textContent = projectName + repoInfo;
+    projectPath.title = `项目: ${projectName}${repoInfo ? '\nGitHub: ' + project.githubRepo : ''}`;
+  } else {
+    projectPath.textContent = '-';
+    projectPath.title = '';
+  }
+
+  if (filename) {
+    filePath.textContent = filename;
+    filePath.title = `文件: ${filename}`;
+  } else {
+    filePath.textContent = '-';
+    filePath.title = '';
+  }
+
+  // 更新分支选择器
+  if (project && project.githubBranch) {
+    // 如果下拉列表中已有该分支则选中,否则添加
+    let optionExists = false;
+    for (let i = 0; i < branchSelect.options.length; i++) {
+      if (branchSelect.options[i].value === project.githubBranch) {
+        branchSelect.selectedIndex = i;
+        optionExists = true;
+        break;
+      }
+    }
+    if (!optionExists && project.githubBranch) {
+      const option = document.createElement('option');
+      option.value = project.githubBranch;
+      option.textContent = project.githubBranch;
+      option.selected = true;
+      branchSelect.appendChild(option);
+    }
+  }
+}
+
+// 刷新分支列表
+async function refreshBranchList() {
+  if (!currentProject) {
+    return;
+  }
+
+  try {
+    const result = await chrome.storage.local.get(['projects', 'githubToken']);
+    const projects = result.projects || {};
+    const project = projects[currentProject];
+
+    if (!project || !project.githubRepo) {
+      return;
+    }
+
+    const token = result.githubToken;
+    if (!token) {
+      return;
+    }
+
+    updateStatus('正在加载分支列表...');
+    const branches = await fetchRepoBranches(project.githubRepo, token);
+
+    // 清空现有选项
+    branchSelect.innerHTML = '<option value="">未选择</option>';
+
+    // 添加所有分支
+    branches.forEach(branch => {
+      const option = document.createElement('option');
+      option.value = branch;
+      option.textContent = branch;
+      if (branch === project.githubBranch) {
+        option.selected = true;
+      }
+      branchSelect.appendChild(option);
+    });
+
+    updateStatus('分支列表已更新');
+  } catch (error) {
+    console.error('刷新分支列表失败:', error);
+    updateStatus('刷新分支列表失败: ' + error.message);
+  }
+}
+
+// 处理分支切换
+async function handleBranchChange() {
+  const selectedBranch = branchSelect.value;
+
+  if (!currentProject || !selectedBranch) {
+    return;
+  }
+
+  try {
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+    const project = projects[currentProject];
+
+    if (project) {
+      project.githubBranch = selectedBranch;
+      await chrome.storage.local.set({ projects: projects });
+      updateStatus(`已切换到分支: ${selectedBranch}`);
+    }
+  } catch (error) {
+    console.error('切换分支失败:', error);
+    updateStatus('切换分支失败: ' + error.message);
+  }
 }

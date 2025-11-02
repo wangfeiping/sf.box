@@ -6,7 +6,11 @@
   "permissions": [
     "storage",
     "unlimitedStorage",
-    "tabs"
+    "tabs",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://api.github.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
