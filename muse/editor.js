@@ -14,6 +14,9 @@ const editorPane = document.getElementById('editorPane');
 const previewPane = document.getElementById('previewPane');
 const fileListPanel = document.getElementById('fileListPanel');
 const gitInfoPanel = document.getElementById('gitInfoPanel');
+const projectPath = document.getElementById('projectPath');
+const filePath = document.getElementById('filePath');
+const branchSelect = document.getElementById('branchSelect');
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -53,6 +56,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('closeGitInfoBtn').addEventListener('click', () => {
     gitInfoPanel.classList.add('hidden');
   });
+
+  // 分支选择相关事件
+  document.getElementById('refreshBranchBtn').addEventListener('click', refreshBranchList);
+  branchSelect.addEventListener('change', handleBranchChange);
+
+  // 加载分支列表
+  await refreshBranchList();
 });
 
 // 打开完整编辑器
@@ -62,7 +72,7 @@ function openFullEditor() {
   });
 }
 
-// 从 storage 加载文件（弹窗传递的）
+// 从 storage 加载文件(弹窗传递的)
 async function loadFileFromStorage() {
   const result = await chrome.storage.local.get(['currentProject', 'currentFile', 'projects']);
 
@@ -76,13 +86,16 @@ async function loadFileFromStorage() {
       filenameInput.value = result.currentFile;
       updateStatus(`已加载: ${result.currentFile}`);
 
+      // 更新项目和文件路径显示
+      updateProjectInfo(project, result.currentFile);
+
       // 清除临时数据
       chrome.storage.local.remove(['currentProject', 'currentFile']);
       return;
     }
   }
 
-  // 如果没有传递的文件，尝试加载最后编辑的文件
+  // 如果没有传递的文件,尝试加载最后编辑的文件
   loadLastFile();
 }
 
@@ -204,6 +217,16 @@ async function loadFile(filename) {
     if (isPreviewMode) {
       updatePreview();
     }
+
+    // 更新项目信息显示
+    if (currentProject) {
+      const result = await chrome.storage.local.get(['projects']);
+      const projects = result.projects || {};
+      const project = projects[currentProject];
+      if (project) {
+        updateProjectInfo(project, filename);
+      }
+    }
   }
 }
 
@@ -292,6 +315,12 @@ async function gitCommit() {
       files: JSON.parse(JSON.stringify(files)) // 深拷贝
     };
 
+    // 如果选择了分支,记录到commit中
+    const selectedBranch = branchSelect.value;
+    if (selectedBranch) {
+      commit.branch = selectedBranch;
+    }
+
     gitData.commits.push(commit);
 
     // 保存到项目中
@@ -300,6 +329,10 @@ async function gitCommit() {
       const projects = result.projects || {};
       if (projects[currentProject]) {
         projects[currentProject].gitData = gitData;
+        // 更新项目的分支信息
+        if (selectedBranch) {
+          projects[currentProject].githubBranch = selectedBranch;
+        }
         await chrome.storage.local.set({ projects: projects });
       }
     } else {
@@ -308,7 +341,8 @@ async function gitCommit() {
     }
 
     commitMessageInput.value = '';
-    updateStatus(`已提交: ${message}`);
+    const branchInfo = selectedBranch ? ` (分支: ${selectedBranch})` : '';
+    updateStatus(`已提交: ${message}${branchInfo}`);
   } catch (error) {
     updateStatus('提交失败: ' + error.message);
   }
@@ -339,80 +373,6 @@ async function fetchRepoBranches(fullName, token) {
   }
 }
 
-// 显示 Push 分支选择对话框
-async function showPushBranchDialog(fullName, currentBranch, token) {
-  // 获取所有分支
-  const branches = await fetchRepoBranches(fullName, token);
-
-  if (branches.length === 0) {
-    // 如果获取失败,使用当前分支
-    return currentBranch || 'main';
-  }
-
-  // 创建分支选择HTML
-  const branchOptions = branches.map(branch =>
-    `<option value="${escapeHtml(branch)}" ${branch === currentBranch ? 'selected' : ''}>${escapeHtml(branch)}</option>`
-  ).join('');
-
-  // 创建对话框
-  const dialogContainer = document.createElement('div');
-  dialogContainer.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
-  `;
-
-  dialogContainer.innerHTML = `
-    <div style="background: white; padding: 20px; border-radius: 8px; min-width: 400px; max-width: 500px;">
-      <h3 style="margin: 0 0 15px 0;">选择推送分支</h3>
-      <div style="margin-bottom: 15px;">
-        <p style="margin-bottom: 10px; color: #666;">仓库: ${escapeHtml(fullName)}</p>
-        <select id="pushBranchSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
-          ${branchOptions}
-        </select>
-      </div>
-      <div style="display: flex; justify-content: flex-end; gap: 10px;">
-        <button id="cancelPushBranchSelect" style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">取消</button>
-        <button id="confirmPushBranchSelect" style="padding: 8px 16px; border: none; background: #0366d6; color: white; border-radius: 4px; cursor: pointer;">推送</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(dialogContainer);
-
-  // 返回Promise等待用户选择
-  return new Promise((resolve) => {
-    const confirmBtn = dialogContainer.querySelector('#confirmPushBranchSelect');
-    const cancelBtn = dialogContainer.querySelector('#cancelPushBranchSelect');
-    const branchSelect = dialogContainer.querySelector('#pushBranchSelect');
-
-    confirmBtn.addEventListener('click', () => {
-      const selectedBranch = branchSelect.value;
-      document.body.removeChild(dialogContainer);
-      resolve(selectedBranch);
-    });
-
-    cancelBtn.addEventListener('click', () => {
-      document.body.removeChild(dialogContainer);
-      resolve(null);
-    });
-  });
-}
-
-// HTML 转义函数
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
 async function gitPush() {
   try {
     // 获取 GitHub 认证信息
@@ -439,6 +399,13 @@ async function gitPush() {
       return;
     }
 
+    // 检查是否选择了分支
+    const selectedBranch = branchSelect.value;
+    if (!selectedBranch) {
+      alert('请先选择要推送的分支');
+      return;
+    }
+
     // 获取 Git 数据
     const gitData = await getGitData();
     if (!gitData.initialized || gitData.commits.length === 0) {
@@ -446,21 +413,7 @@ async function gitPush() {
       return;
     }
 
-    // 显示分支选择对话框
-    const selectedBranch = await showPushBranchDialog(project.githubRepo, project.githubBranch, authResult.githubToken);
-
-    if (!selectedBranch) {
-      // 用户取消了
-      return;
-    }
-
-    // 更新项目的分支信息
-    if (selectedBranch !== project.githubBranch) {
-      project.githubBranch = selectedBranch;
-      await chrome.storage.local.set({ projects: projects });
-    }
-
-    updateStatus('正在推送到 GitHub...');
+    updateStatus(`正在推送到 GitHub (${selectedBranch})...`);
 
     // 获取最新的提交
     const latestCommit = gitData.commits[gitData.commits.length - 1];
@@ -546,6 +499,8 @@ async function gitPush() {
       const projects = result.projects || {};
       if (projects[currentProject]) {
         projects[currentProject].gitData = gitData;
+        // 更新项目的分支信息
+        projects[currentProject].githubBranch = selectedBranch;
         await chrome.storage.local.set({ projects: projects });
       }
     } else {
@@ -720,4 +675,114 @@ function simpleDiff(oldText, newText) {
   }
 
   return diff || '没有差异';
+}
+
+// 更新项目信息显示
+function updateProjectInfo(project, filename) {
+  if (project) {
+    // 显示项目名称和GitHub仓库信息
+    const projectName = project.name || currentProject;
+    const repoInfo = project.githubRepo ? ` (${project.githubRepo})` : '';
+    projectPath.textContent = projectName + repoInfo;
+    projectPath.title = `项目: ${projectName}${repoInfo ? '\nGitHub: ' + project.githubRepo : ''}`;
+  } else {
+    projectPath.textContent = '-';
+    projectPath.title = '';
+  }
+
+  if (filename) {
+    filePath.textContent = filename;
+    filePath.title = `文件: ${filename}`;
+  } else {
+    filePath.textContent = '-';
+    filePath.title = '';
+  }
+
+  // 更新分支选择器
+  if (project && project.githubBranch) {
+    // 如果下拉列表中已有该分支则选中,否则添加
+    let optionExists = false;
+    for (let i = 0; i < branchSelect.options.length; i++) {
+      if (branchSelect.options[i].value === project.githubBranch) {
+        branchSelect.selectedIndex = i;
+        optionExists = true;
+        break;
+      }
+    }
+    if (!optionExists && project.githubBranch) {
+      const option = document.createElement('option');
+      option.value = project.githubBranch;
+      option.textContent = project.githubBranch;
+      option.selected = true;
+      branchSelect.appendChild(option);
+    }
+  }
+}
+
+// 刷新分支列表
+async function refreshBranchList() {
+  if (!currentProject) {
+    return;
+  }
+
+  try {
+    const result = await chrome.storage.local.get(['projects', 'githubToken']);
+    const projects = result.projects || {};
+    const project = projects[currentProject];
+
+    if (!project || !project.githubRepo) {
+      return;
+    }
+
+    const token = result.githubToken;
+    if (!token) {
+      return;
+    }
+
+    updateStatus('正在加载分支列表...');
+    const branches = await fetchRepoBranches(project.githubRepo, token);
+
+    // 清空现有选项
+    branchSelect.innerHTML = '<option value="">未选择</option>';
+
+    // 添加所有分支
+    branches.forEach(branch => {
+      const option = document.createElement('option');
+      option.value = branch;
+      option.textContent = branch;
+      if (branch === project.githubBranch) {
+        option.selected = true;
+      }
+      branchSelect.appendChild(option);
+    });
+
+    updateStatus('分支列表已更新');
+  } catch (error) {
+    console.error('刷新分支列表失败:', error);
+    updateStatus('刷新分支列表失败: ' + error.message);
+  }
+}
+
+// 处理分支切换
+async function handleBranchChange() {
+  const selectedBranch = branchSelect.value;
+
+  if (!currentProject || !selectedBranch) {
+    return;
+  }
+
+  try {
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+    const project = projects[currentProject];
+
+    if (project) {
+      project.githubBranch = selectedBranch;
+      await chrome.storage.local.set({ projects: projects });
+      updateStatus(`已切换到分支: ${selectedBranch}`);
+    }
+  } catch (error) {
+    console.error('切换分支失败:', error);
+    updateStatus('切换分支失败: ' + error.message);
+  }
 }

@@ -37,6 +37,25 @@
 </head>
 <body>
   <div class="container">
+    <!-- 项目信息栏 -->
+    <div class="project-info-bar" style="background: #f5f5f5; padding: 8px 16px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+      <div style="display: flex; gap: 20px; align-items: center;">
+        <div>
+          <strong>项目:</strong> <span id="projectPath" style="color: #0366d6;">-</span>
+        </div>
+        <div>
+          <strong>文件:</strong> <span id="filePath" style="color: #586069;">-</span>
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <label for="branchSelect" style="font-weight: 600;">分支:</label>
+        <select id="branchSelect" style="padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; min-width: 120px;">
+          <option value="">未选择</option>
+        </select>
+        <button id="refreshBranchBtn" title="刷新分支列表" style="padding: 4px 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔄</button>
+      </div>
+    </div>
+
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
