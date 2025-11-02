@@ -697,6 +697,11 @@ async function importGithubRepo(fullName, repoName, defaultBranch) {
       files: {},
       githubRepo: fullName,
       githubBranch: defaultBranch,
+      // 自动初始化 Git 仓库
+      gitData: {
+        initialized: true,
+        commits: []
+      },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -804,12 +809,24 @@ async function downloadRepoFiles(projectId, fullName, defaultBranch, repoName) {
     }
 
     projects[projectId].updatedAt = new Date().toISOString();
+
+    // 创建初始 commit，记录从 GitHub clone 的状态
+    const initialCommit = {
+      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+      message: `Initial commit from GitHub: ${fullName}`,
+      timestamp: new Date().toISOString(),
+      files: JSON.parse(JSON.stringify(projects[projectId].files)), // 深拷贝所有文件
+      fromGithub: true
+    };
+
+    projects[projectId].gitData.commits.push(initialCommit);
+
     await saveProjects();
     renderProjects();
 
     const message = totalFiles > maxFiles
-      ? `项目 "${repoName}" 导入完成!\n已下载 ${downloadedCount} 个文本文件(共 ${totalFiles} 个,已限制最多 ${maxFiles} 个)`
-      : `项目 "${repoName}" 导入完成!\n已下载 ${downloadedCount} 个文件`;
+      ? `项目 "${repoName}" 导入完成!\n已下载 ${downloadedCount} 个文本文件(共 ${totalFiles} 个,已限制最多 ${maxFiles} 个)\n\nGit 仓库已自动初始化，并创建了初始提交。`
+      : `项目 "${repoName}" 导入完成!\n已下载 ${downloadedCount} 个文件\n\nGit 仓库已自动初始化，并创建了初始提交。`;
 
     alert(message);
 

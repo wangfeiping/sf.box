@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('gitInitBtn').addEventListener('click', gitInit);
   document.getElementById('gitCommitBtn').addEventListener('click', gitCommit);
+  document.getElementById('gitPushBtn').addEventListener('click', gitPush);
   document.getElementById('gitLogBtn').addEventListener('click', gitLog);
   document.getElementById('gitDiffBtn').addEventListener('click', gitDiff);
 
@@ -211,9 +212,21 @@ async function deleteFile(filename) {
     return;
   }
 
-  const files = await getFiles();
-  delete files[filename];
-  await chrome.storage.local.set({ files: files });
+  if (currentProject) {
+    // 从项目中删除文件
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+    if (projects[currentProject] && projects[currentProject].files) {
+      delete projects[currentProject].files[filename];
+      projects[currentProject].updatedAt = new Date().toISOString();
+      await chrome.storage.local.set({ projects: projects });
+    }
+  } else {
+    // 兼容旧的存储结构
+    const files = await getFiles();
+    delete files[filename];
+    await chrome.storage.local.set({ files: files });
+  }
 
   updateStatus(`已删除: ${filename}`);
   showFileList();
@@ -232,7 +245,20 @@ async function gitInit() {
     const gitData = await getGitData();
     gitData.initialized = true;
     gitData.commits = [];
-    await chrome.storage.local.set({ gitData: gitData });
+
+    // 保存到项目中
+    if (currentProject) {
+      const result = await chrome.storage.local.get(['projects']);
+      const projects = result.projects || {};
+      if (projects[currentProject]) {
+        projects[currentProject].gitData = gitData;
+        await chrome.storage.local.set({ projects: projects });
+      }
+    } else {
+      // 兼容旧的全局存储
+      await chrome.storage.local.set({ gitData: gitData });
+    }
+
     updateStatus('Git 仓库已初始化');
   } catch (error) {
     updateStatus('初始化失败: ' + error.message);
@@ -267,12 +293,158 @@ async function gitCommit() {
     };
 
     gitData.commits.push(commit);
-    await chrome.storage.local.set({ gitData: gitData });
+
+    // 保存到项目中
+    if (currentProject) {
+      const result = await chrome.storage.local.get(['projects']);
+      const projects = result.projects || {};
+      if (projects[currentProject]) {
+        projects[currentProject].gitData = gitData;
+        await chrome.storage.local.set({ projects: projects });
+      }
+    } else {
+      // 兼容旧的全局存储
+      await chrome.storage.local.set({ gitData: gitData });
+    }
 
     commitMessageInput.value = '';
     updateStatus(`已提交: ${message}`);
   } catch (error) {
     updateStatus('提交失败: ' + error.message);
+  }
+}
+
+async function gitPush() {
+  try {
+    // 获取 GitHub 认证信息
+    const authResult = await chrome.storage.local.get(['githubToken', 'githubUser']);
+    if (!authResult.githubToken || !authResult.githubUser) {
+      alert('请先在主界面连接 GitHub 账户');
+      return;
+    }
+
+    // 获取当前项目信息
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+
+    if (!currentProject || !projects[currentProject]) {
+      alert('未找到当前项目信息');
+      return;
+    }
+
+    const project = projects[currentProject];
+
+    // 检查项目是否有 GitHub 仓库信息
+    if (!project.githubRepo) {
+      alert('当前项目没有关联的 GitHub 仓库。\n提示：从 GitHub 导入的项目会自动关联仓库信息。');
+      return;
+    }
+
+    // 获取 Git 数据
+    const gitData = await getGitData();
+    if (!gitData.initialized || gitData.commits.length === 0) {
+      alert('没有可推送的提交');
+      return;
+    }
+
+    updateStatus('正在推送到 GitHub...');
+
+    // 获取最新的提交
+    const latestCommit = gitData.commits[gitData.commits.length - 1];
+
+    // 获取仓库信息
+    const [owner, repo] = project.githubRepo.split('/');
+    const branch = project.githubBranch || 'main';
+
+    // 为每个文件创建或更新内容
+    const token = authResult.githubToken;
+    let pushedFiles = 0;
+    const files = latestCommit.files;
+
+    for (const [filename, fileData] of Object.entries(files)) {
+      try {
+        // 获取文件当前的 SHA (如果存在)
+        let sha = null;
+        try {
+          const getResponse = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/contents/${filename}?ref=${branch}`,
+            {
+              headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github.v3+json'
+              }
+            }
+          );
+          if (getResponse.ok) {
+            const fileInfo = await getResponse.json();
+            sha = fileInfo.sha;
+          }
+        } catch (e) {
+          // 文件不存在，sha 保持为 null
+        }
+
+        // 创建或更新文件
+        const content = btoa(unescape(encodeURIComponent(fileData.content)));
+        const updateData = {
+          message: latestCommit.message,
+          content: content,
+          branch: branch
+        };
+
+        if (sha) {
+          updateData.sha = sha;
+        }
+
+        const updateResponse = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${filename}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `token ${token}`,
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updateData)
+          }
+        );
+
+        if (!updateResponse.ok) {
+          const error = await updateResponse.json();
+          throw new Error(`推送文件 ${filename} 失败: ${error.message}`);
+        }
+
+        pushedFiles++;
+        updateStatus(`正在推送... (${pushedFiles}/${Object.keys(files).length})`);
+      } catch (error) {
+        console.error(`推送文件 ${filename} 时出错:`, error);
+        alert(`推送文件 ${filename} 失败: ${error.message}`);
+        return;
+      }
+    }
+
+    // 标记提交为已推送
+    latestCommit.pushed = true;
+    latestCommit.pushedAt = new Date().toISOString();
+
+    // 保存到项目中
+    if (currentProject) {
+      const result = await chrome.storage.local.get(['projects']);
+      const projects = result.projects || {};
+      if (projects[currentProject]) {
+        projects[currentProject].gitData = gitData;
+        await chrome.storage.local.set({ projects: projects });
+      }
+    } else {
+      // 兼容旧的全局存储
+      await chrome.storage.local.set({ gitData: gitData });
+    }
+
+    updateStatus(`✅ 成功推送 ${pushedFiles} 个文件到 GitHub`);
+    alert(`成功推送到 GitHub!\n仓库: ${project.githubRepo}\n分支: ${branch}\n文件数: ${pushedFiles}`);
+  } catch (error) {
+    console.error('Push 错误:', error);
+    updateStatus('推送失败: ' + error.message);
+    alert('推送到 GitHub 失败: ' + error.message);
   }
 }
 
@@ -359,11 +531,31 @@ function updatePreview() {
 
 // 辅助函数
 async function getFiles() {
+  // 如果有当前项目，从项目中获取文件
+  if (currentProject) {
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+    if (projects[currentProject] && projects[currentProject].files) {
+      return projects[currentProject].files;
+    }
+  }
+
+  // 兼容旧的存储结构
   const result = await chrome.storage.local.get(['files']);
   return result.files || {};
 }
 
 async function getGitData() {
+  if (currentProject) {
+    // 从项目中获取 Git 数据
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+    if (projects[currentProject]) {
+      return projects[currentProject].gitData || { initialized: false, commits: [] };
+    }
+  }
+
+  // 兼容旧的全局 Git 数据
   const result = await chrome.storage.local.get(['gitData']);
   return result.gitData || { initialized: false, commits: [] };
 }
