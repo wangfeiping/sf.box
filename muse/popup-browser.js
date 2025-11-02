@@ -678,12 +678,102 @@ function bindGithubRepoImportEvents() {
   reposList._importListener = newListener;
 }
 
+// 获取仓库的所有分支
+async function fetchRepoBranches(fullName) {
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${fullName}/branches`,
+      {
+        headers: {
+          'Authorization': `token ${githubToken}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`获取分支失败: ${response.statusText}`);
+    }
+
+    const branches = await response.json();
+    return branches.map(b => b.name);
+  } catch (error) {
+    console.error('获取分支失败:', error);
+    return [];
+  }
+}
+
+// 显示分支选择对话框
+async function showBranchSelectionDialog(fullName, repoName, defaultBranch) {
+  // 获取所有分支
+  const branches = await fetchRepoBranches(fullName);
+
+  if (branches.length === 0) {
+    // 如果获取失败,使用默认分支
+    return defaultBranch;
+  }
+
+  // 创建分支选择HTML
+  const branchOptions = branches.map(branch =>
+    `<option value="${escapeHtml(branch)}" ${branch === defaultBranch ? 'selected' : ''}>${escapeHtml(branch)}</option>`
+  ).join('');
+
+  // 创建对话框
+  const dialog = document.createElement('div');
+  dialog.className = 'dialog';
+  dialog.innerHTML = `
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3>选择导入分支</h3>
+      </div>
+      <div class="dialog-body">
+        <p style="margin-bottom: 15px;">仓库: ${escapeHtml(repoName)}</p>
+        <select id="branchSelect" class="dialog-select">
+          ${branchOptions}
+        </select>
+      </div>
+      <div class="dialog-footer">
+        <button id="cancelBranchSelect" class="btn-secondary">取消</button>
+        <button id="confirmBranchSelect" class="btn-primary">导入</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(dialog);
+
+  // 返回Promise等待用户选择
+  return new Promise((resolve) => {
+    const confirmBtn = dialog.querySelector('#confirmBranchSelect');
+    const cancelBtn = dialog.querySelector('#cancelBranchSelect');
+    const branchSelect = dialog.querySelector('#branchSelect');
+
+    confirmBtn.addEventListener('click', () => {
+      const selectedBranch = branchSelect.value;
+      document.body.removeChild(dialog);
+      resolve(selectedBranch);
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      document.body.removeChild(dialog);
+      resolve(null);
+    });
+  });
+}
+
 // 导入 GitHub 项目
 async function importGithubRepo(fullName, repoName, defaultBranch) {
   if (!githubToken) return;
 
+  // 显示分支选择对话框
+  const selectedBranch = await showBranchSelectionDialog(fullName, repoName, defaultBranch);
+
+  if (!selectedBranch) {
+    // 用户取消了
+    return;
+  }
+
   // 显示确认对话框
-  if (!confirm(`确定要导入整个仓库 "${repoName}" 吗?\n\n这将下载所有文件内容到本地存储。`)) {
+  if (!confirm(`确定要导入整个仓库 "${repoName}" 的 "${selectedBranch}" 分支吗?\n\n这将下载所有文件内容到本地存储。`)) {
     return;
   }
 
@@ -693,10 +783,10 @@ async function importGithubRepo(fullName, repoName, defaultBranch) {
     const project = {
       id: projectId,
       name: repoName,
-      description: `从 GitHub 导入: ${fullName}`,
+      description: `从 GitHub 导入: ${fullName} (${selectedBranch})`,
       files: {},
       githubRepo: fullName,
-      githubBranch: defaultBranch,
+      githubBranch: selectedBranch,
       // 自动初始化 Git 仓库
       gitData: {
         initialized: true,
@@ -719,7 +809,7 @@ async function importGithubRepo(fullName, repoName, defaultBranch) {
     }, 100);
 
     // 开始异步下载文件
-    downloadRepoFiles(projectId, fullName, defaultBranch, repoName);
+    downloadRepoFiles(projectId, fullName, selectedBranch, repoName);
 
   } catch (error) {
     alert('导入失败: ' + error.message);

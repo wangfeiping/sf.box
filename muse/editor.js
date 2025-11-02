@@ -314,6 +314,105 @@ async function gitCommit() {
   }
 }
 
+// 获取仓库的所有分支
+async function fetchRepoBranches(fullName, token) {
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${fullName}/branches`,
+      {
+        headers: {
+          'Authorization': `token ${token}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`获取分支失败: ${response.statusText}`);
+    }
+
+    const branches = await response.json();
+    return branches.map(b => b.name);
+  } catch (error) {
+    console.error('获取分支失败:', error);
+    return [];
+  }
+}
+
+// 显示 Push 分支选择对话框
+async function showPushBranchDialog(fullName, currentBranch, token) {
+  // 获取所有分支
+  const branches = await fetchRepoBranches(fullName, token);
+
+  if (branches.length === 0) {
+    // 如果获取失败,使用当前分支
+    return currentBranch || 'main';
+  }
+
+  // 创建分支选择HTML
+  const branchOptions = branches.map(branch =>
+    `<option value="${escapeHtml(branch)}" ${branch === currentBranch ? 'selected' : ''}>${escapeHtml(branch)}</option>`
+  ).join('');
+
+  // 创建对话框
+  const dialogContainer = document.createElement('div');
+  dialogContainer.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+
+  dialogContainer.innerHTML = `
+    <div style="background: white; padding: 20px; border-radius: 8px; min-width: 400px; max-width: 500px;">
+      <h3 style="margin: 0 0 15px 0;">选择推送分支</h3>
+      <div style="margin-bottom: 15px;">
+        <p style="margin-bottom: 10px; color: #666;">仓库: ${escapeHtml(fullName)}</p>
+        <select id="pushBranchSelect" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+          ${branchOptions}
+        </select>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="cancelPushBranchSelect" style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">取消</button>
+        <button id="confirmPushBranchSelect" style="padding: 8px 16px; border: none; background: #0366d6; color: white; border-radius: 4px; cursor: pointer;">推送</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(dialogContainer);
+
+  // 返回Promise等待用户选择
+  return new Promise((resolve) => {
+    const confirmBtn = dialogContainer.querySelector('#confirmPushBranchSelect');
+    const cancelBtn = dialogContainer.querySelector('#cancelPushBranchSelect');
+    const branchSelect = dialogContainer.querySelector('#pushBranchSelect');
+
+    confirmBtn.addEventListener('click', () => {
+      const selectedBranch = branchSelect.value;
+      document.body.removeChild(dialogContainer);
+      resolve(selectedBranch);
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      document.body.removeChild(dialogContainer);
+      resolve(null);
+    });
+  });
+}
+
+// HTML 转义函数
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 async function gitPush() {
   try {
     // 获取 GitHub 认证信息
@@ -347,6 +446,20 @@ async function gitPush() {
       return;
     }
 
+    // 显示分支选择对话框
+    const selectedBranch = await showPushBranchDialog(project.githubRepo, project.githubBranch, authResult.githubToken);
+
+    if (!selectedBranch) {
+      // 用户取消了
+      return;
+    }
+
+    // 更新项目的分支信息
+    if (selectedBranch !== project.githubBranch) {
+      project.githubBranch = selectedBranch;
+      await chrome.storage.local.set({ projects: projects });
+    }
+
     updateStatus('正在推送到 GitHub...');
 
     // 获取最新的提交
@@ -354,7 +467,7 @@ async function gitPush() {
 
     // 获取仓库信息
     const [owner, repo] = project.githubRepo.split('/');
-    const branch = project.githubBranch || 'main';
+    const branch = selectedBranch;
 
     // 为每个文件创建或更新内容
     const token = authResult.githubToken;
@@ -425,6 +538,7 @@ async function gitPush() {
     // 标记提交为已推送
     latestCommit.pushed = true;
     latestCommit.pushedAt = new Date().toISOString();
+    latestCommit.pushedBranch = branch;
 
     // 保存到项目中
     if (currentProject) {
