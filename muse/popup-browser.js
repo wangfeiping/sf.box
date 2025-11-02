@@ -161,16 +161,16 @@ function renderProjectCard(id, project) {
 
   return `
     <div class="project-card" data-project-id="${id}">
-      <div class="project-header" onclick="toggleProject('${id}')">
+      <div class="project-header" data-action="toggle-project" data-project-id="${id}">
         <span class="project-toggle">▶</span>
         <span class="project-icon">📁</span>
         <div class="project-info">
           <div class="project-name">${escapeHtml(project.name)}</div>
           ${project.description ? `<div class="project-desc">${escapeHtml(project.description)}</div>` : ''}
         </div>
-        <div class="project-actions" onclick="event.stopPropagation()">
-          <button onclick="renameProject('${id}')" title="重命名">✏️</button>
-          <button onclick="deleteProject('${id}')" class="delete-btn" title="删除">🗑️</button>
+        <div class="project-actions" data-action="stop-propagation">
+          <button data-action="rename-project" data-project-id="${id}" title="重命名">✏️</button>
+          <button data-action="delete-project" data-project-id="${id}" class="delete-btn" title="删除">🗑️</button>
         </div>
       </div>
       <div class="file-list">
@@ -178,13 +178,13 @@ function renderProjectCard(id, project) {
           const file = files[fileName];
           const updateTime = file.lastModified ? new Date(file.lastModified).toLocaleDateString('zh-CN') : '';
           return `
-            <div class="file-item" onclick="openFile('${id}', '${escapeHtml(fileName)}')">
+            <div class="file-item" data-action="open-file" data-project-id="${id}" data-file-name="${escapeHtml(fileName)}">
               <span class="file-icon">📄</span>
               <span class="file-name">${escapeHtml(fileName)}</span>
               ${updateTime ? `<span class="file-meta">${updateTime}</span>` : ''}
-              <div class="file-actions" onclick="event.stopPropagation()">
-                <button onclick="renameFile('${id}', '${escapeHtml(fileName)}')" title="重命名">✏️</button>
-                <button onclick="deleteFile('${id}', '${escapeHtml(fileName)}')" class="delete-btn" title="删除">🗑️</button>
+              <div class="file-actions" data-action="stop-propagation">
+                <button data-action="rename-file" data-project-id="${id}" data-file-name="${escapeHtml(fileName)}" title="重命名">✏️</button>
+                <button data-action="delete-file" data-project-id="${id}" data-file-name="${escapeHtml(fileName)}" class="delete-btn" title="删除">🗑️</button>
               </div>
             </div>
           `;
@@ -195,7 +195,58 @@ function renderProjectCard(id, project) {
 }
 
 function bindProjectEvents() {
-  // 项目卡片展开/收起通过 onclick 属性已绑定
+  // 使用事件委托处理所有项目相关的点击事件
+  const projectList = document.getElementById('projectList');
+
+  // 移除旧的监听器
+  if (projectList._clickListener) {
+    projectList.removeEventListener('click', projectList._clickListener);
+  }
+
+  const clickListener = (e) => {
+    const target = e.target;
+    const actionEl = target.closest('[data-action]');
+
+    if (!actionEl) return;
+
+    const action = actionEl.dataset.action;
+    const projectId = actionEl.dataset.projectId;
+    const fileName = actionEl.dataset.fileName;
+
+    // 阻止事件冒泡的元素
+    if (action === 'stop-propagation') {
+      e.stopPropagation();
+      return;
+    }
+
+    switch (action) {
+      case 'toggle-project':
+        toggleProject(projectId);
+        break;
+      case 'rename-project':
+        e.stopPropagation();
+        renameProject(projectId);
+        break;
+      case 'delete-project':
+        e.stopPropagation();
+        deleteProject(projectId);
+        break;
+      case 'open-file':
+        openFile(projectId, fileName);
+        break;
+      case 'rename-file':
+        e.stopPropagation();
+        renameFile(projectId, fileName);
+        break;
+      case 'delete-file':
+        e.stopPropagation();
+        deleteFile(projectId, fileName);
+        break;
+    }
+  };
+
+  projectList.addEventListener('click', clickListener);
+  projectList._clickListener = clickListener;
 }
 
 // 切换项目展开/收起
@@ -415,14 +466,6 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// 使函数全局可访问
-window.toggleProject = toggleProject;
-window.openFile = openFile;
-window.renameProject = renameProject;
-window.deleteProject = deleteProject;
-window.renameFile = renameFile;
-window.deleteFile = deleteFile;
-
 // ============ GitHub 功能 ============
 
 // 加载 GitHub 认证信息
@@ -568,6 +611,9 @@ async function loadGithubRepos() {
     }
 
     reposList.innerHTML = repos.map(repo => renderGithubRepo(repo)).join('');
+
+    // 绑定导入按钮事件 (使用事件委托)
+    bindGithubRepoImportEvents();
   } catch (error) {
     loading.classList.add('hidden');
     reposList.innerHTML = `<div class="empty-state"><p style="color: #e74c3c;">加载失败: ${error.message}</p></div>`;
@@ -589,7 +635,10 @@ function renderGithubRepo(repo) {
           </div>
           <div class="repo-desc">${escapeHtml(description)}</div>
         </div>
-        <button class="btn-primary" onclick="importGithubRepo('${repo.full_name}', '${escapeHtml(repo.name)}', '${escapeHtml(repo.default_branch)}')">
+        <button class="btn-primary btn-import-repo"
+                data-repo-fullname="${escapeHtml(repo.full_name)}"
+                data-repo-name="${escapeHtml(repo.name)}"
+                data-repo-branch="${escapeHtml(repo.default_branch)}">
           导入
         </button>
       </div>
@@ -603,29 +652,42 @@ function renderGithubRepo(repo) {
   `;
 }
 
+// 绑定 GitHub 仓库导入按钮事件
+function bindGithubRepoImportEvents() {
+  const reposList = document.getElementById('githubReposList');
+
+  // 移除旧的事件监听器 (如果存在)
+  const oldListener = reposList._importListener;
+  if (oldListener) {
+    reposList.removeEventListener('click', oldListener);
+  }
+
+  // 使用事件委托处理所有导入按钮点击
+  const newListener = (e) => {
+    const btn = e.target.closest('.btn-import-repo');
+    if (!btn) return;
+
+    const fullName = btn.dataset.repoFullname;
+    const repoName = btn.dataset.repoName;
+    const branch = btn.dataset.repoBranch;
+
+    importGithubRepo(fullName, repoName, branch);
+  };
+
+  reposList.addEventListener('click', newListener);
+  reposList._importListener = newListener;
+}
+
 // 导入 GitHub 项目
 async function importGithubRepo(fullName, repoName, defaultBranch) {
   if (!githubToken) return;
 
+  // 显示确认对话框
+  if (!confirm(`确定要导入整个仓库 "${repoName}" 吗?\n\n这将下载所有文件内容到本地存储。`)) {
+    return;
+  }
+
   try {
-    // 获取仓库的 README 文件
-    const readmeResponse = await fetch(
-      `https://api.github.com/repos/${fullName}/readme`,
-      {
-        headers: {
-          'Authorization': `token ${githubToken}`,
-          'Accept': 'application/vnd.github.v3+json'
-        }
-      }
-    );
-
-    let readmeContent = '';
-    if (readmeResponse.ok) {
-      const readmeData = await readmeResponse.json();
-      // 解码 base64 内容
-      readmeContent = decodeBase64Unicode(readmeData.content);
-    }
-
     // 创建项目
     const projectId = 'github_' + Date.now();
     const project = {
@@ -639,30 +701,121 @@ async function importGithubRepo(fullName, repoName, defaultBranch) {
       updatedAt: new Date().toISOString()
     };
 
-    // 添加 README 文件
-    if (readmeContent) {
-      project.files['README.md'] = {
-        filename: 'README.md',
-        content: readmeContent,
-        lastModified: new Date().toISOString()
-      };
-    }
-
     projects[projectId] = project;
     await saveProjects();
 
     hideGithubReposDialog();
     renderProjects();
 
-    alert(`项目 "${repoName}" 导入成功!`);
-
     // 展开项目
     setTimeout(() => {
       const card = document.querySelector(`[data-project-id="${projectId}"]`);
       if (card) card.classList.add('expanded');
     }, 100);
+
+    // 开始异步下载文件
+    downloadRepoFiles(projectId, fullName, defaultBranch, repoName);
+
   } catch (error) {
     alert('导入失败: ' + error.message);
+  }
+}
+
+// 下载仓库的所有文件
+async function downloadRepoFiles(projectId, fullName, defaultBranch, repoName) {
+  try {
+    // 获取仓库的文件树
+    const treeResponse = await fetch(
+      `https://api.github.com/repos/${fullName}/git/trees/${defaultBranch}?recursive=1`,
+      {
+        headers: {
+          'Authorization': `token ${githubToken}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      }
+    );
+
+    if (!treeResponse.ok) {
+      throw new Error('获取文件树失败');
+    }
+
+    const treeData = await treeResponse.json();
+    const files = treeData.tree.filter(item =>
+      item.type === 'blob' &&
+      (item.path.endsWith('.md') ||
+       item.path.endsWith('.txt') ||
+//       item.path.endsWith('.json') ||
+//       item.path.endsWith('.js') ||
+//       item.path.endsWith('.css') ||
+//       item.path.endsWith('.html') ||
+//       item.path.endsWith('.yml') ||
+//       item.path.endsWith('.yaml') ||
+//       item.path.endsWith('.xml') ||
+       item.path === 'README' ||
+       item.path === 'LICENSE')
+    );
+
+    let downloadedCount = 0;
+    const totalFiles = files.length;
+
+    // 限制文件数量,避免下载过多
+    const maxFiles = 100;
+    const filesToDownload = files.slice(0, maxFiles);
+
+    console.log(`开始下载 ${filesToDownload.length} 个文件...`);
+
+    // 批量下载文件(每次5个并发)
+    const batchSize = 5;
+    for (let i = 0; i < filesToDownload.length; i += batchSize) {
+      const batch = filesToDownload.slice(i, i + batchSize);
+
+      await Promise.all(batch.map(async (file) => {
+        try {
+          const blobResponse = await fetch(file.url, {
+            headers: {
+              'Authorization': `token ${githubToken}`,
+              'Accept': 'application/vnd.github.v3+json'
+            }
+          });
+
+          if (blobResponse.ok) {
+            const blobData = await blobResponse.json();
+            const content = decodeBase64Unicode(blobData.content);
+
+            // 添加文件到项目
+            projects[projectId].files[file.path] = {
+              filename: file.path,
+              content: content,
+              lastModified: new Date().toISOString(),
+              size: file.size
+            };
+
+            downloadedCount++;
+            console.log(`已下载: ${downloadedCount}/${filesToDownload.length} - ${file.path}`);
+          }
+        } catch (error) {
+          console.error(`下载文件失败: ${file.path}`, error);
+        }
+      }));
+
+      // 每批次后保存一次
+      await saveProjects();
+      renderProjects();
+    }
+
+    projects[projectId].updatedAt = new Date().toISOString();
+    await saveProjects();
+    renderProjects();
+
+    const message = totalFiles > maxFiles
+      ? `项目 "${repoName}" 导入完成!\n已下载 ${downloadedCount} 个文本文件(共 ${totalFiles} 个,已限制最多 ${maxFiles} 个)`
+      : `项目 "${repoName}" 导入完成!\n已下载 ${downloadedCount} 个文件`;
+
+    alert(message);
+
+  } catch (error) {
+    alert(`下载文件失败: ${error.message}`);
+    console.error('Download error:', error);
   }
 }
 
@@ -680,6 +833,3 @@ function decodeBase64Unicode(base64) {
   const decoder = new TextDecoder('utf-8');
   return decoder.decode(bytes);
 }
-
-// 使 GitHub 函数全局可访问
-window.importGithubRepo = importGithubRepo;
