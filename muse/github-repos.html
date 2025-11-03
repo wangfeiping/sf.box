@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub 项目</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 400px;
+      height: 600px;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    .github-page {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+    }
+
+    /* GitHub 标题栏 */
+    .github-header {
+      flex: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      background: #ffffff;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .github-header h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* GitHub 搜索框区域 */
+    .github-search-bar {
+      flex: none;
+      padding: 16px;
+      background: #ffffff;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d0d0d0;
+      border-radius: 6px;
+      font-size: 14px;
+      background: #f8f9fa;
+      transition: all 0.2s;
+      caret-color: #667eea;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #667eea;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      caret-color: #667eea;
+    }
+
+    /* GitHub 项目容器（可滚动区域） */
+    .github-repos-container {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: #ffffff;
+    }
+
+    /* 滚动条样式 */
+    .github-repos-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .github-repos-container::-webkit-scrollbar-track {
+      background: #f0f0f0;
+    }
+
+    .github-repos-container::-webkit-scrollbar-thumb {
+      background: #c0c0c0;
+      border-radius: 4px;
+    }
+
+    .github-repos-container::-webkit-scrollbar-thumb:hover {
+      background: #a0a0a0;
+    }
+
+    /* 加载状态 */
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f0f0f0;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* GitHub 项目列表 */
+    .github-repos-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* GitHub 项目卡片 */
+    .github-repo-card {
+      padding: 16px;
+      border-bottom: 1px solid #e0e0e0;
+      transition: all 0.2s;
+    }
+
+    .github-repo-card:hover {
+      background: #f8f9fa;
+    }
+
+    .github-repo-card:last-child {
+      border-bottom: none;
+    }
+
+    .repo-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .repo-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .repo-name {
+      font-weight: 600;
+      font-size: 15px;
+      color: #0366d6;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .repo-desc {
+      font-size: 13px;
+      color: #666;
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    .repo-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: #999;
+      flex-wrap: wrap;
+    }
+
+    .repo-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* 按钮图标 */
+    .btn-icon {
+      padding: 6px 10px;
+      border: 1px solid #d0d0d0;
+      background: #ffffff;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-icon:hover {
+      background: #f0f0f0;
+      border-color: #b0b0b0;
+    }
+
+    /* 加载更多容器 */
+    .load-more-container {
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+      border-top: 1px solid #e0e0e0;
+      background: #f8f9fa;
+    }
+
+    .load-more-container button {
+      padding: 10px 24px;
+      font-size: 14px;
+      width: 100%;
+      max-width: 300px;
+      border: 1px solid #d0d0d0;
+      background: #ffffff;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .load-more-container button:hover {
+      background: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <div class="github-page">
+    <!-- GitHub 标题栏 -->
+    <div class="github-header">
+      <h3>GitHub 项目</h3>
+      <div class="header-actions">
+        <button id="refreshGithubRepos" class="btn-icon" title="刷新">🔄</button>
+        <button id="githubLogout" class="btn-icon" title="断开连接">🚪</button>
+        <button id="closeGithubPage" class="btn-icon" title="返回">←</button>
+      </div>
+    </div>
+
+    <!-- GitHub 搜索框 -->
+    <div class="github-search-bar">
+      <input type="text" id="githubSearchInput" placeholder="🔍 搜索 GitHub 项目..." class="search-input" lang="zh-CN">
+    </div>
+
+    <!-- GitHub 项目列表容器 -->
+    <div class="github-repos-container">
+      <div id="githubReposLoading" class="loading-state hidden">
+        <div class="spinner"></div>
+        <p>加载中...</p>
+      </div>
+      <div id="githubReposList" class="github-repos-list">
+        <!-- GitHub 项目列表将动态生成 -->
+      </div>
+      <div id="loadMoreContainer" class="load-more-container hidden">
+        <button id="loadMoreRepos" class="btn-secondary">加载更多</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="libs/marked.min.js"></script>
+  <script src="github-repos.js"></script>
+</body>
+</html>

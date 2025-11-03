@@ -1,16 +1,42 @@
 /* 项目浏览器样式 */
 
+/* 通用工具类 */
+.hidden {
+  display: none !important;
+}
+
+/* 重置 HTML 和 body 样式，确保弹出框不显示滚动条 */
+html:has(body.popup-browser) {
+  overflow: hidden !important;
+  width: 400px !important;
+  height: 600px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body.popup-browser {
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  width: 400px !important;
+  height: 600px !important;
+  box-sizing: border-box !important;
+}
+
 .popup-browser {
   width: 400px;
   height: 600px;
   overflow: hidden;
+  position: relative; /* 添加相对定位，使对话框相对于此容器定位 */
 }
 
 .browser-container {
   display: flex;
   flex-direction: column;
   height: 100%;
+  max-height: 600px;
   background: #f8f9fa;
+  overflow: hidden;
 }
 
 /* 工具栏 */
@@ -94,6 +120,7 @@
   font-size: 14px;
   background: #f8f9fa;
   transition: all 0.2s;
+  caret-color: #667eea;
 }
 
 .search-input:focus {
@@ -101,6 +128,7 @@
   border-color: #667eea;
   background: #ffffff;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  caret-color: #667eea;
 }
 
 /* 项目列表容器 */
@@ -343,7 +371,7 @@
 
 /* 对话框 */
 .dialog {
-  position: fixed;
+  position: absolute; /* 改为 absolute，相对于 .popup-browser 定位 */
   top: 0;
   left: 0;
   right: 0;
@@ -353,10 +381,7 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
-}
-
-.dialog.hidden {
-  display: none;
+  overflow: hidden; /* 确保对话框不会超出 */
 }
 
 .dialog-content {
@@ -413,6 +438,7 @@
   font-size: 14px;
   font-family: inherit;
   transition: all 0.2s;
+  caret-color: #667eea;
 }
 
 .dialog-input:focus,
@@ -421,6 +447,7 @@
   outline: none;
   border-color: #667eea;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  caret-color: #667eea;
 }
 
 .dialog-textarea {
@@ -501,16 +528,96 @@
 
 /* GitHub 相关样式 */
 
-/* 大尺寸对话框 */
-.dialog-large {
-  max-width: 600px;
-  max-height: 80vh;
+/* 大尺寸对话框 - 使用绝对定位确保不会被撑大 */
+.dialog-large .dialog-content {
+  width: 360px;
+  height: 380px;
+  max-width: 360px;
+  max-height: 380px;
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative; /* 为子元素提供定位上下文 */
 }
 
 .dialog-large .dialog-body {
-  max-height: 500px;
-  overflow-y: auto;
+  position: absolute; /* 使用绝对定位 */
+  top: 0; /* 从顶部开始 */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
+  box-sizing: border-box;
+}
+
+/* GitHub 标题栏 */
+.github-header {
+  flex: none; /* 不参与 flex 伸缩 */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+  box-sizing: border-box;
+}
+
+.github-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* GitHub 搜索框区域 */
+.github-search-bar {
+  flex: none; /* 不参与 flex 伸缩 */
+  padding: 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1; /* 确保在内容之上 */
+}
+
+/* GitHub 项目容器（可滚动区域） - 使用绝对定位 */
+.github-repos-container {
+  position: absolute;
+  top: 118px; /* 标题栏高度(~58px) + 搜索框高度(~60px) */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #c0c0c0 #f0f0f0;
+  background: #ffffff; /* 添加白色背景 */
+}
+
+/* 滚动条样式 (GitHub 列表) - WebKit浏览器 */
+.github-repos-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.github-repos-container::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.github-repos-container::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 4px;
+  min-height: 40px;
+}
+
+.github-repos-container::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
 }
 
 /* 加载状态 */
@@ -544,6 +651,9 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  width: 100%;
+  min-height: min-content; /* 确保能显示内容 */
+  /* 不设置高度，让容器自然扩展，但会被父元素的滚动限制 */
 }
 
 /* GitHub 项目卡片 */
@@ -551,6 +661,7 @@
   padding: 16px;
   border-bottom: 1px solid #e0e0e0;
   transition: all 0.2s;
+  flex-shrink: 0; /* 防止卡片被压缩 */
 }
 
 .github-repo-card:hover {
@@ -625,20 +736,18 @@
   border-color: #b0b0b0;
 }
 
-/* 滚动条样式 (GitHub 列表) */
-.dialog-large .dialog-body::-webkit-scrollbar {
-  width: 8px;
+/* 加载更多容器 */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  border-top: 1px solid #e0e0e0;
+  background: #f8f9fa;
 }
 
-.dialog-large .dialog-body::-webkit-scrollbar-track {
-  background: #f0f0f0;
-}
-
-.dialog-large .dialog-body::-webkit-scrollbar-thumb {
-  background: #c0c0c0;
-  border-radius: 4px;
-}
-
-.dialog-large .dialog-body::-webkit-scrollbar-thumb:hover {
-  background: #a0a0a0;
+.load-more-container button {
+  padding: 10px 24px;
+  font-size: 14px;
+  width: 100%;
+  max-width: 300px;
 }

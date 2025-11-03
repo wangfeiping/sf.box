@@ -115,21 +115,31 @@
   <!-- GitHub 项目列表对话框 -->
   <div id="githubReposDialog" class="dialog hidden">
     <div class="dialog-content dialog-large">
-      <div class="dialog-header">
-        <h3>GitHub 项目</h3>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <button id="refreshGithubRepos" class="btn-icon" title="刷新">🔄</button>
-          <button id="githubLogout" class="btn-icon" title="断开连接">🚪</button>
-          <button id="closeGithubReposDialog" class="dialog-close">✕</button>
-        </div>
-      </div>
       <div class="dialog-body">
-        <div id="githubReposLoading" class="loading-state hidden">
-          <div class="spinner"></div>
-          <p>加载中...</p>
+        <!-- GitHub 标题和工具栏 -->
+        <div class="github-header">
+          <h3>GitHub 项目</h3>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button id="refreshGithubRepos" class="btn-icon" title="刷新">🔄</button>
+            <button id="githubLogout" class="btn-icon" title="断开连接">🚪</button>
+            <button id="closeGithubReposDialog" class="dialog-close">✕</button>
+          </div>
         </div>
-        <div id="githubReposList" class="github-repos-list">
-          <!-- GitHub 项目列表将动态生成 -->
+        <!-- GitHub 搜索框 -->
+        <div class="github-search-bar">
+          <input type="text" id="githubSearchInput" placeholder="🔍 搜索 GitHub 项目..." class="search-input" lang="zh-CN">
+        </div>
+        <div class="github-repos-container">
+          <div id="githubReposLoading" class="loading-state hidden">
+            <div class="spinner"></div>
+            <p>加载中...</p>
+          </div>
+          <div id="githubReposList" class="github-repos-list">
+            <!-- GitHub 项目列表将动态生成 -->
+          </div>
+          <div id="loadMoreContainer" class="load-more-container hidden">
+            <button id="loadMoreRepos" class="btn-secondary">加载更多</button>
+          </div>
         </div>
       </div>
     </div>

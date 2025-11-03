@@ -5,6 +5,9 @@ let projects = {};
 let searchQuery = '';
 let githubToken = null;
 let githubUser = null;
+let allGithubRepos = []; // 存储所有 GitHub 项目
+let githubSearchQuery = ''; // GitHub 搜索关键词
+let displayedReposCount = 10; // 当前显示的项目数量
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -67,6 +70,16 @@ function initEventListeners() {
   document.getElementById('closeGithubReposDialog').addEventListener('click', hideGithubReposDialog);
   document.getElementById('refreshGithubRepos').addEventListener('click', loadGithubRepos);
   document.getElementById('githubLogout').addEventListener('click', disconnectGithub);
+
+  // GitHub 搜索
+  document.getElementById('githubSearchInput').addEventListener('input', (e) => {
+    githubSearchQuery = e.target.value.toLowerCase();
+    displayedReposCount = 10; // 重置显示数量
+    renderGithubRepos();
+  });
+
+  // 加载更多按钮
+  document.getElementById('loadMoreRepos').addEventListener('click', loadMoreRepos);
 }
 
 // 打开完整编辑器
@@ -504,8 +517,10 @@ function updateGithubUI() {
 
 // 处理 GitHub 按钮点击
 function handleGithubClick() {
+  console.log('handleGithubClick 被调用, githubToken:', githubToken ? '已设置' : '未设置');
   if (githubToken) {
-    showGithubReposDialog();
+    // 在当前弹出框中切换到 GitHub 项目页面
+    window.location.href = 'github-repos.html';
   } else {
     showGithubLoginDialog();
   }
@@ -571,7 +586,13 @@ async function disconnectGithub() {
 
 // 显示/隐藏 GitHub 项目列表对话框
 function showGithubReposDialog() {
+  console.log('showGithubReposDialog 被调用');
   document.getElementById('githubReposDialog').classList.remove('hidden');
+  // 重置搜索和显示状态
+  document.getElementById('githubSearchInput').value = '';
+  githubSearchQuery = '';
+  displayedReposCount = 10;
+  console.log('准备调用 loadGithubRepos');
   loadGithubRepos();
 }
 
@@ -581,11 +602,17 @@ function hideGithubReposDialog() {
 
 // 加载 GitHub 项目列表
 async function loadGithubRepos() {
-  if (!githubToken) return;
+  console.log('loadGithubRepos 被调用, githubToken:', githubToken ? '已设置' : '未设置');
+
+  if (!githubToken) {
+    console.log('没有 githubToken，直接返回');
+    return;
+  }
 
   const loading = document.getElementById('githubReposLoading');
   const reposList = document.getElementById('githubReposList');
 
+  console.log('开始加载项目列表...');
   loading.classList.remove('hidden');
   reposList.innerHTML = '';
 
@@ -598,26 +625,90 @@ async function loadGithubRepos() {
       }
     });
 
+    console.log('API 响应状态:', response.status);
+
     if (!response.ok) {
       throw new Error('获取项目列表失败');
     }
 
-    const repos = await response.json();
+    allGithubRepos = await response.json();
+    console.log('获取到的项目数量:', allGithubRepos.length);
+
     loading.classList.add('hidden');
 
-    if (repos.length === 0) {
+    if (allGithubRepos.length === 0) {
       reposList.innerHTML = '<div class="empty-state"><p>没有找到项目</p></div>';
+      document.getElementById('loadMoreContainer').classList.add('hidden');
       return;
     }
 
-    reposList.innerHTML = repos.map(repo => renderGithubRepo(repo)).join('');
+    // 渲染项目列表
+    console.log('准备渲染项目列表');
+    renderGithubRepos();
 
     // 绑定导入按钮事件 (使用事件委托)
     bindGithubRepoImportEvents();
   } catch (error) {
+    console.error('加载项目失败:', error);
     loading.classList.add('hidden');
     reposList.innerHTML = `<div class="empty-state"><p style="color: #e74c3c;">加载失败: ${error.message}</p></div>`;
+    document.getElementById('loadMoreContainer').classList.add('hidden');
   }
+}
+
+// 渲染 GitHub 项目列表（支持搜索和分页）
+function renderGithubRepos() {
+  const reposList = document.getElementById('githubReposList');
+  const loadMoreContainer = document.getElementById('loadMoreContainer');
+  const loading = document.getElementById('githubReposLoading');
+
+  console.log('renderGithubRepos 被调用');
+  console.log('allGithubRepos:', allGithubRepos);
+
+  // 确保隐藏加载状态
+  loading.classList.add('hidden');
+
+  // 过滤项目
+  let filteredRepos = allGithubRepos;
+  if (githubSearchQuery) {
+    filteredRepos = allGithubRepos.filter(repo => {
+      return repo.name.toLowerCase().includes(githubSearchQuery) ||
+             (repo.description && repo.description.toLowerCase().includes(githubSearchQuery)) ||
+             (repo.language && repo.language.toLowerCase().includes(githubSearchQuery));
+    });
+  }
+
+  console.log('filteredRepos 数量:', filteredRepos.length);
+
+  if (filteredRepos.length === 0) {
+    reposList.innerHTML = '<div class="empty-state"><p>没有找到匹配的项目</p></div>';
+    loadMoreContainer.classList.add('hidden');
+    return;
+  }
+
+  // 只显示前 N 个项目
+  const reposToDisplay = filteredRepos.slice(0, displayedReposCount);
+  console.log('将显示的项目数量:', reposToDisplay.length);
+
+  reposList.innerHTML = reposToDisplay.map(repo => renderGithubRepo(repo)).join('');
+
+  console.log('reposList.innerHTML 长度:', reposList.innerHTML.length);
+
+  // 显示或隐藏"加载更多"按钮
+  if (filteredRepos.length > displayedReposCount) {
+    loadMoreContainer.classList.remove('hidden');
+    const remaining = filteredRepos.length - displayedReposCount;
+    document.getElementById('loadMoreRepos').textContent = `加载更多 (还有 ${remaining} 个)`;
+  } else {
+    loadMoreContainer.classList.add('hidden');
+  }
+}
+
+// 加载更多项目
+function loadMoreRepos() {
+  displayedReposCount += 10;
+  renderGithubRepos();
+  bindGithubRepoImportEvents();
 }
 
 // 渲染 GitHub 项目卡片
