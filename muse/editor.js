@@ -76,21 +76,36 @@ function openFullEditor() {
 async function loadFileFromStorage() {
   const result = await chrome.storage.local.get(['currentProject', 'currentFile', 'projects']);
 
-  if (result.currentProject && result.currentFile && result.projects) {
+  if (result.currentProject && result.projects) {
     const project = result.projects[result.currentProject];
-    if (project && project.files[result.currentFile]) {
+    if (project) {
       currentProject = result.currentProject;
-      currentFile = result.currentFile;
-      const file = project.files[result.currentFile];
-      editor.value = file.content || '';
-      filenameInput.value = result.currentFile;
-      updateStatus(`已加载: ${result.currentFile}`);
 
-      // 更新项目和文件路径显示
-      updateProjectInfo(project, result.currentFile);
+      // 如果有指定文件，加载该文件
+      if (result.currentFile && project.files[result.currentFile]) {
+        currentFile = result.currentFile;
+        const file = project.files[result.currentFile];
+        editor.value = file.content || '';
+        filenameInput.value = result.currentFile;
+        updateStatus(`已加载: ${result.currentFile}`);
+      } else {
+        // 如果没有指定文件，只是打开了项目
+        updateStatus(`已打开项目: ${project.name}`);
+      }
 
       // 清除临时数据
       chrome.storage.local.remove(['currentProject', 'currentFile']);
+
+      // 先加载分支列表，再更新项目信息（这样分支选择器已经有选项了）
+      await refreshBranchList();
+
+      // 重新读取项目数据（确保获取最新的分支信息）
+      const updatedResult = await chrome.storage.local.get(['projects']);
+      const updatedProject = updatedResult.projects[currentProject];
+
+      // 更新项目信息显示
+      updateProjectInfo(updatedProject || project, currentFile);
+
       return;
     }
   }
@@ -680,14 +695,41 @@ function simpleDiff(oldText, newText) {
 // 更新项目信息显示
 function updateProjectInfo(project, filename) {
   if (project) {
-    // 显示项目名称和GitHub仓库信息
+    // 只显示项目名称
     const projectName = project.name || currentProject;
-    const repoInfo = project.githubRepo ? ` (${project.githubRepo})` : '';
-    projectPath.textContent = projectName + repoInfo;
-    projectPath.title = `项目: ${projectName}${repoInfo ? '\nGitHub: ' + project.githubRepo : ''}`;
+    projectPath.textContent = projectName;
+
+    // 设置点击事件，打开项目路径（包含当前分支）
+    projectPath.onclick = () => {
+      if (project.githubRepo) {
+        // 获取当前选中的分支
+        const selectedBranch = branchSelect.value;
+        let url = `https://github.com/${project.githubRepo}`;
+
+        // 如果有选中的分支，添加到URL中
+        if (selectedBranch) {
+          url += `/tree/${selectedBranch}`;
+        }
+
+        chrome.tabs.create({ url: url });
+      }
+    };
+
+    // 设置悬停提示（与点击打开的路径一致）
+    if (project.githubRepo) {
+      const selectedBranch = branchSelect.value;
+      let fullPath = `https://github.com/${project.githubRepo}`;
+      if (selectedBranch) {
+        fullPath += `/tree/${selectedBranch}`;
+      }
+      projectPath.title = fullPath;
+    } else {
+      projectPath.title = projectName;
+    }
   } else {
     projectPath.textContent = '-';
     projectPath.title = '';
+    projectPath.onclick = null;
   }
 
   if (filename) {
@@ -742,15 +784,24 @@ async function refreshBranchList() {
     updateStatus('正在加载分支列表...');
     const branches = await fetchRepoBranches(project.githubRepo, token);
 
+    if (branches.length === 0) {
+      updateStatus('获取分支列表失败');
+      return;
+    }
+
+    // 保存当前选中的分支（如果有）
+    const currentBranch = project.githubBranch || branches[0];
+
     // 清空现有选项
-    branchSelect.innerHTML = '<option value="">未选择</option>';
+    branchSelect.innerHTML = '';
 
     // 添加所有分支
     branches.forEach(branch => {
       const option = document.createElement('option');
       option.value = branch;
       option.textContent = branch;
-      if (branch === project.githubBranch) {
+      // 选中项目的默认分支或当前分支
+      if (branch === currentBranch) {
         option.selected = true;
       }
       branchSelect.appendChild(option);
@@ -780,6 +831,15 @@ async function handleBranchChange() {
       project.githubBranch = selectedBranch;
       await chrome.storage.local.set({ projects: projects });
       updateStatus(`已切换到分支: ${selectedBranch}`);
+
+      // 更新项目路径的悬停提示，使其包含新选择的分支
+      if (project.githubRepo) {
+        let fullPath = `https://github.com/${project.githubRepo}`;
+        if (selectedBranch) {
+          fullPath += `/tree/${selectedBranch}`;
+        }
+        projectPath.title = fullPath;
+      }
     }
   } catch (error) {
     console.error('切换分支失败:', error);

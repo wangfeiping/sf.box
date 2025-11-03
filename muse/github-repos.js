@@ -98,8 +98,8 @@ async function loadGithubRepos() {
     // 渲染项目列表
     renderGithubRepos();
 
-    // 绑定导入按钮事件 (使用事件委托)
-    bindGithubRepoImportEvents();
+    // 绑定项目卡片点击事件
+    bindGithubRepoClickEvents();
 
   } catch (error) {
     console.error('加载项目失败:', error);
@@ -153,7 +153,7 @@ function renderGithubRepos() {
 function loadMoreRepos() {
   displayedReposCount += 10;
   renderGithubRepos();
-  bindGithubRepoImportEvents();
+  bindGithubRepoClickEvents();
 }
 
 // 渲染 GitHub 项目卡片
@@ -163,7 +163,10 @@ function renderGithubRepo(repo) {
   const description = repo.description || '无描述';
 
   return `
-    <div class="github-repo-card">
+    <div class="github-repo-card"
+         data-repo-fullname="${escapeHtml(repo.full_name)}"
+         data-repo-name="${escapeHtml(repo.name)}"
+         data-repo-branch="${escapeHtml(repo.default_branch)}">
       <div class="repo-header">
         <div class="repo-info">
           <div class="repo-name">
@@ -171,12 +174,6 @@ function renderGithubRepo(repo) {
           </div>
           <div class="repo-desc">${escapeHtml(description)}</div>
         </div>
-        <button class="btn-icon btn-import-repo"
-                data-repo-fullname="${escapeHtml(repo.full_name)}"
-                data-repo-name="${escapeHtml(repo.name)}"
-                data-repo-branch="${escapeHtml(repo.default_branch)}">
-          导入
-        </button>
       </div>
       <div class="repo-meta">
         <span>⭐ ${repo.stargazers_count}</span>
@@ -188,30 +185,34 @@ function renderGithubRepo(repo) {
   `;
 }
 
-// 绑定 GitHub 仓库导入按钮事件
-function bindGithubRepoImportEvents() {
+// 绑定 GitHub 项目卡片点击事件
+function bindGithubRepoClickEvents() {
   const reposList = document.getElementById('githubReposList');
 
   // 移除旧的事件监听器 (如果存在)
-  const oldListener = reposList._importListener;
+  const oldListener = reposList._clickListener;
   if (oldListener) {
     reposList.removeEventListener('click', oldListener);
   }
 
-  // 使用事件委托处理所有导入按钮点击
-  const newListener = (e) => {
-    const btn = e.target.closest('.btn-import-repo');
-    if (!btn) return;
+  // 使用事件委托处理所有项目卡片点击
+  const newListener = async (e) => {
+    const card = e.target.closest('.github-repo-card');
+    if (!card) return;
 
-    const fullName = btn.dataset.repoFullname;
-    const repoName = btn.dataset.repoName;
-    const branch = btn.dataset.repoBranch;
+    const fullName = card.dataset.repoFullname;
+    const repoName = card.dataset.repoName;
+    const defaultBranch = card.dataset.repoBranch;
 
-    importGithubRepo(fullName, repoName, branch);
+    // 获取所有分支
+    const branches = await fetchRepoBranches(fullName);
+
+    // 创建项目并导入
+    await importRepoAndOpenEditor(fullName, repoName, defaultBranch, branches);
   };
 
   reposList.addEventListener('click', newListener);
-  reposList._importListener = newListener;
+  reposList._clickListener = newListener;
 }
 
 // 获取仓库的所有分支
@@ -236,6 +237,78 @@ async function fetchRepoBranches(fullName) {
   } catch (error) {
     console.error('获取分支失败:', error);
     return [];
+  }
+}
+
+// 导入仓库并打开编辑器
+async function importRepoAndOpenEditor(fullName, repoName, defaultBranch, branches) {
+  if (!githubToken) return;
+
+  try {
+    // 从 storage 加载现有项目
+    const result = await chrome.storage.local.get(['projects']);
+    const projects = result.projects || {};
+
+    // 检查是否已经导入过该项目
+    let existingProjectId = null;
+    for (const [projectId, project] of Object.entries(projects)) {
+      if (project.githubRepo === fullName) {
+        existingProjectId = projectId;
+        break;
+      }
+    }
+
+    let projectId;
+    if (existingProjectId) {
+      // 如果已存在，使用现有项目并确保分支信息是最新的
+      projectId = existingProjectId;
+      const existingProject = projects[existingProjectId];
+
+      // 更新分支信息为默认分支（如果还没有设置或需要更新）
+      if (!existingProject.githubBranch || existingProject.githubBranch !== defaultBranch) {
+        existingProject.githubBranch = defaultBranch;
+        existingProject.updatedAt = new Date().toISOString();
+        await chrome.storage.local.set({ projects });
+      }
+    } else {
+      // 创建新项目
+      projectId = 'github_' + Date.now();
+      const project = {
+        id: projectId,
+        name: repoName,
+        description: `从 GitHub 导入: ${fullName}`,
+        files: {},
+        githubRepo: fullName,
+        githubBranch: defaultBranch,
+        // 自动初始化 Git 仓库
+        gitData: {
+          initialized: true,
+          commits: []
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      projects[projectId] = project;
+      await chrome.storage.local.set({ projects });
+
+      // 开始异步下载文件
+      downloadRepoFiles(projectId, fullName, defaultBranch, repoName);
+    }
+
+    // 设置当前项目到 storage，让编辑器加载
+    await chrome.storage.local.set({
+      currentProject: projectId,
+      currentFile: null
+    });
+
+    // 打开编辑器页面
+    chrome.tabs.create({
+      url: chrome.runtime.getURL('editor.html')
+    });
+
+  } catch (error) {
+    alert('打开编辑器失败: ' + error.message);
   }
 }
 
