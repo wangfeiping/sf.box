@@ -92,6 +92,16 @@
 
     <!-- 编辑器和预览区域 -->
     <div class="editor-container">
+      <!-- 左侧文件树 -->
+      <div id="fileTree" class="file-tree">
+        <div class="file-tree-header">
+          <span>文件浏览器</span>
+        </div>
+        <div id="fileTreeContent" class="file-tree-content">
+          <div class="empty-tree-message">未加载项目</div>
+        </div>
+      </div>
+
       <div id="editorPane" class="editor-pane">
         <textarea id="editor" placeholder="在这里输入 Markdown 内容..." lang="zh-CN" spellcheck="false"></textarea>
       </div>

@@ -17,6 +17,7 @@ const gitInfoPanel = document.getElementById('gitInfoPanel');
 const projectPath = document.getElementById('projectPath');
 const filePath = document.getElementById('filePath');
 const branchSelect = document.getElementById('branchSelect');
+const fileTreeContent = document.getElementById('fileTreeContent');
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -106,6 +107,9 @@ async function loadFileFromStorage() {
       // 更新项目信息显示
       updateProjectInfo(updatedProject || project, currentFile);
 
+      // 刷新文件树
+      await refreshFileTree();
+
       return;
     }
   }
@@ -174,6 +178,9 @@ async function saveFile() {
 
     currentFile = fileData.filename;
     updateStatus(`已保存: ${fileData.filename}`);
+
+    // 刷新文件树
+    await refreshFileTree();
   } catch (error) {
     updateStatus('保存失败: ' + error.message);
   }
@@ -268,6 +275,9 @@ async function deleteFile(filename) {
 
   updateStatus(`已删除: ${filename}`);
   showFileList();
+
+  // 刷新文件树
+  await refreshFileTree();
 }
 
 async function loadLastFile() {
@@ -846,3 +856,151 @@ async function handleBranchChange() {
     updateStatus('切换分支失败: ' + error.message);
   }
 }
+
+// ========== 文件树功能 ==========
+
+// 构建文件树结构
+function buildFileTree(files) {
+  const tree = {};
+
+  Object.keys(files).forEach(filename => {
+    const parts = filename.split('/');
+    let current = tree;
+
+    parts.forEach((part, index) => {
+      if (index === parts.length - 1) {
+        // 这是文件
+        if (!current._files) current._files = [];
+        current._files.push({ name: part, fullPath: filename, data: files[filename] });
+      } else {
+        // 这是文件夹
+        if (!current[part]) {
+          current[part] = {};
+        }
+        current = current[part];
+      }
+    });
+  });
+
+  return tree;
+}
+
+// 渲染文件树
+function renderFileTree(tree, parentElement, level = 0) {
+  // 先渲染文件夹
+  Object.keys(tree).forEach(key => {
+    if (key === '_files') return; // 跳过文件列表
+
+    const folderDiv = document.createElement('div');
+    folderDiv.className = 'tree-folder';
+
+    const folderItem = document.createElement('div');
+    folderItem.className = 'tree-item folder';
+    folderItem.innerHTML = `
+      <span class="chevron">▶</span>
+      <span class="tree-icon">📁</span>
+      <span class="tree-item-name">${key}</span>
+    `;
+
+    const childrenDiv = document.createElement('div');
+    childrenDiv.className = 'tree-children';
+    childrenDiv.style.display = 'none';
+
+    // 文件夹点击事件
+    folderItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isExpanded = folderItem.classList.toggle('expanded');
+      childrenDiv.style.display = isExpanded ? 'block' : 'none';
+    });
+
+    folderDiv.appendChild(folderItem);
+    folderDiv.appendChild(childrenDiv);
+    parentElement.appendChild(folderDiv);
+
+    // 递归渲染子项
+    renderFileTree(tree[key], childrenDiv, level + 1);
+  });
+
+  // 然后渲染文件
+  if (tree._files) {
+    tree._files.forEach(file => {
+      const fileItem = document.createElement('div');
+      fileItem.className = 'tree-item file';
+      fileItem.dataset.filepath = file.fullPath;
+      fileItem.innerHTML = `
+        <span class="tree-icon">📄</span>
+        <span class="tree-item-name">${file.name}</span>
+      `;
+
+      // 如果是当前打开的文件，标记为激活状态
+      if (currentFile === file.fullPath) {
+        fileItem.classList.add('active');
+      }
+
+      // 文件点击事件
+      fileItem.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await loadFileFromTree(file.fullPath);
+
+        // 更新激活状态
+        document.querySelectorAll('.tree-item.file').forEach(item => {
+          item.classList.remove('active');
+        });
+        fileItem.classList.add('active');
+      });
+
+      parentElement.appendChild(fileItem);
+    });
+  }
+}
+
+// 从文件树加载文件
+async function loadFileFromTree(filepath) {
+  const files = await getFiles();
+  const fileData = files[filepath];
+
+  if (fileData) {
+    editor.value = fileData.content;
+    filenameInput.value = filepath;
+    currentFile = filepath;
+    updateStatus(`已加载: ${filepath}`);
+    updateCharCount();
+    if (isPreviewMode) {
+      updatePreview();
+    }
+
+    // 更新项目信息显示
+    if (currentProject) {
+      const result = await chrome.storage.local.get(['projects']);
+      const projects = result.projects || {};
+      const project = projects[currentProject];
+      if (project) {
+        updateProjectInfo(project, filepath);
+      }
+    }
+  }
+}
+
+// 刷新文件树
+async function refreshFileTree() {
+  if (!currentProject) {
+    fileTreeContent.innerHTML = '<div class="empty-tree-message">未加载项目</div>';
+    return;
+  }
+
+  const files = await getFiles();
+  const fileNames = Object.keys(files);
+
+  if (fileNames.length === 0) {
+    fileTreeContent.innerHTML = '<div class="empty-tree-message">项目中暂无文件</div>';
+    return;
+  }
+
+  // 清空现有内容
+  fileTreeContent.innerHTML = '';
+
+  // 构建并渲染文件树
+  const tree = buildFileTree(files);
+  renderFileTree(tree, fileTreeContent);
+}
+
