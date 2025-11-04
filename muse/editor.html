@@ -52,33 +52,7 @@
           </select>
           <button id="refreshBranchBtn" title="刷新分支列表" style="padding: 4px 8px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer;">🔄</button>
         </div>
-        <div>
-          <strong>文件:</strong> <span id="filePath" style="color: #586069;">-</span>
-        </div>
       </div>
-    </div>
-
-    <!-- 顶部工具栏 -->
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <input type="text" id="filename" placeholder="文件名.md" class="filename-input" lang="zh-CN">
-        <button id="newFileBtn" title="新建文件">📄 新建</button>
-        <button id="saveBtn" title="保存文件">💾 保存</button>
-        <button id="loadBtn" title="加载文件">📂 打开</button>
-      </div>
-      <div class="toolbar-right">
-        <button id="togglePreviewBtn" title="切换预览">👁️ 预览</button>
-      </div>
-    </div>
-
-    <!-- Git 操作栏 -->
-    <div class="git-toolbar">
-      <button id="gitInitBtn" title="初始化 Git 仓库">🔧 Init</button>
-      <button id="gitCommitBtn" title="提交更改">✅ Commit</button>
-      <button id="gitPushBtn" title="推送到 GitHub">⬆️ Push</button>
-      <button id="gitLogBtn" title="查看历史">📜 Log</button>
-      <button id="gitDiffBtn" title="查看差异">🔍 Diff</button>
-      <input type="text" id="commitMessage" placeholder="提交信息" class="commit-input" lang="zh-CN">
     </div>
 
     <!-- 文件列表 -->
@@ -90,8 +64,8 @@
       <div id="fileList" class="file-list"></div>
     </div>
 
-    <!-- 编辑器和预览区域 -->
-    <div class="editor-container">
+    <!-- 主内容区域 -->
+    <div class="main-content">
       <!-- 左侧文件树 -->
       <div id="fileTree" class="file-tree">
         <div class="file-tree-header">
@@ -102,11 +76,43 @@
         </div>
       </div>
 
-      <div id="editorPane" class="editor-pane">
-        <textarea id="editor" placeholder="在这里输入 Markdown 内容..." lang="zh-CN" spellcheck="false"></textarea>
-      </div>
-      <div id="previewPane" class="preview-pane hidden">
-        <div id="preview" class="preview-content"></div>
+      <!-- 右侧文件信息区域 -->
+      <div class="file-info-area">
+        <!-- 功能按钮栏 -->
+        <div class="function-buttons-bar">
+          <!-- 顶部工具栏 -->
+          <div class="toolbar">
+            <div class="toolbar-left">
+              <input type="text" id="filename" placeholder="文件名.md" class="filename-input" lang="zh-CN">
+              <button id="newFileBtn" title="新建文件">📄 新建</button>
+              <button id="saveBtn" title="保存文件">💾 保存</button>
+              <button id="loadBtn" title="加载文件">📂 打开</button>
+            </div>
+            <div class="toolbar-right">
+              <button id="togglePreviewBtn" title="切换预览">👁️ 预览</button>
+            </div>
+          </div>
+
+          <!-- Git 操作栏 -->
+          <div class="git-toolbar">
+            <button id="gitInitBtn" title="初始化 Git 仓库">🔧 Init</button>
+            <button id="gitCommitBtn" title="提交更改">✅ Commit</button>
+            <button id="gitPushBtn" title="推送到 GitHub">⬆️ Push</button>
+            <button id="gitLogBtn" title="查看历史">📜 Log</button>
+            <button id="gitDiffBtn" title="查看差异">🔍 Diff</button>
+            <input type="text" id="commitMessage" placeholder="提交信息" class="commit-input" lang="zh-CN">
+          </div>
+        </div>
+
+        <!-- 编辑器和预览区域 -->
+        <div class="editor-container">
+          <div id="editorPane" class="editor-pane">
+            <textarea id="editor" placeholder="在这里输入 Markdown 内容..." lang="zh-CN" spellcheck="false"></textarea>
+          </div>
+          <div id="previewPane" class="preview-pane hidden">
+            <div id="preview" class="preview-content"></div>
+          </div>
+        </div>
       </div>
     </div>
 

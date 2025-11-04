@@ -772,13 +772,13 @@ function updateProjectInfo(project, filename) {
     projectPath.onclick = null;
   }
 
-  if (filename) {
-    filePath.textContent = filename;
-    filePath.title = `文件: ${filename}`;
-  } else {
-    filePath.textContent = '-';
-    filePath.title = '';
-  }
+  //if (filename) {
+  //  filePath.textContent = filename;
+  //  filePath.title = `文件: ${filename}`;
+  //} else {
+  //filePath.textContent = '-';
+  //filePath.title = '';
+  //}
 
   // 更新分支选择器
   if (project && project.githubBranch) {
